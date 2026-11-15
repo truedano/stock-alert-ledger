@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- 僅備份使用者的監控規則與成交記帳資料庫，以及 DataStore 偏好設定 -->
+    <include domain="database" path="." />
+    <exclude domain="database" path="androidx.work.workdb" />
+    <exclude domain="database" path="androidx.work.workdb-shm" />
+    <exclude domain="database" path="androidx.work.workdb-wal" />
+    <include domain="file" path="datastore/stock_assistant_prefs.preferences_pb" />
+</full-backup-content>

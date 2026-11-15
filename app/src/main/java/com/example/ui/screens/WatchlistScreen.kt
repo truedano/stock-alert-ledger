@@ -1,0 +1,516 @@
+package com.example.ui.screens
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ShowChart
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.NotificationsActive
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import com.example.data.local.WatchlistRuleEntity
+import com.example.domain.model.Formatters
+import com.example.ui.WatchlistItemUi
+import com.example.ui.WatchlistUiState
+import com.example.ui.components.MarketBadge
+import com.example.ui.components.NotificationPermissionBanner
+import com.example.ui.components.WatchlistStatusHeader
+import com.example.ui.theme.AlertAmber
+import com.example.ui.theme.AlertAmberContainer
+import com.example.ui.theme.BrandSky
+import com.example.ui.theme.CanvasObsidian
+import com.example.ui.theme.FinancialTextStyles
+import com.example.ui.theme.HairlineBorder
+import com.example.ui.theme.SurfaceCard
+import com.example.ui.theme.SurfaceCardHigh
+import com.example.ui.theme.TaiwanGreen
+import com.example.ui.theme.TaiwanGreenContainer
+import com.example.ui.theme.TaiwanRed
+import com.example.ui.theme.TaiwanRedContainer
+import com.example.ui.theme.TextMuted
+import com.example.ui.theme.TextPrimary
+import com.example.ui.theme.TextSecondary
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun WatchlistScreen(
+    uiState: WatchlistUiState,
+    hasNotificationPermission: Boolean,
+    onRequestNotificationPermission: () -> Unit,
+    onRefresh: () -> Unit,
+    onAddClick: () -> Unit,
+    onEditRule: (WatchlistItemUi) -> Unit,
+    onToggleEnabled: (Long, Boolean) -> Unit,
+    onDeleteRule: (Long) -> Unit,
+    onResetTrigger: (Long) -> Unit,
+    onQuickBuyClick: (WatchlistItemUi) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        containerColor = CanvasObsidian,
+        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0.dp),
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = onAddClick,
+                containerColor = BrandSky,
+                contentColor = CanvasObsidian,
+                modifier = Modifier.testTag("add_watchlist_fab"),
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Add,
+                    contentDescription = "新增監控項目",
+                )
+            }
+        },
+    ) { innerPadding ->
+        PullToRefreshBox(
+            isRefreshing = uiState.isRefreshing,
+            onRefresh = onRefresh,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.TopCenter,
+            ) {
+                LazyColumn(
+                    modifier = Modifier
+                        .widthIn(max = 720.dp)
+                        .fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 12.dp,
+                        bottom = 92.dp,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    item(key = "header_title") {
+                        Column {
+                            Text(
+                                text = "價格與指標監控",
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = TextPrimary,
+                            )
+                            Text(
+                                text = "台股／美股即時追蹤，觸發價格或技術指標條件立即推播",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = TextSecondary,
+                            )
+                        }
+                    }
+
+                    if (!hasNotificationPermission) {
+                        item(key = "permission_banner") {
+                            NotificationPermissionBanner(
+                                onGrantClick = onRequestNotificationPermission,
+                            )
+                        }
+                    }
+
+                    item(key = "status_header") {
+                        WatchlistStatusHeader(
+                            mode = uiState.dataSourceMode,
+                            lastSyncTimestamp = uiState.lastSyncTimestamp,
+                            lastSyncMessage = uiState.lastSyncMessage,
+                            isRefreshing = uiState.isRefreshing,
+                            hasRateLimitWarning = uiState.hasRateLimitWarning,
+                            onRefreshClick = onRefresh,
+                        )
+                    }
+
+                    if (uiState.items.isEmpty()) {
+                        item(key = "empty_watchlist") {
+                            EmptyWatchlistCard(onAddClick = onAddClick)
+                        }
+                    } else {
+                        items(
+                            items = uiState.items,
+                            key = { it.rule.id },
+                        ) { item ->
+                            WatchlistRuleCard(
+                                item = item,
+                                onToggleEnabled = { enabled ->
+                                    onToggleEnabled(item.rule.id, enabled)
+                                },
+                                onEdit = { onEditRule(item) },
+                                onDelete = { onDeleteRule(item.rule.id) },
+                                onResetTrigger = { onResetTrigger(item.rule.id) },
+                                onQuickBuy = { onQuickBuyClick(item) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyWatchlistCard(
+    onAddClick: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = SurfaceCard,
+        border = BorderStroke(1.dp, HairlineBorder),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = SurfaceCardHigh,
+                modifier = Modifier.size(56.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ShowChart,
+                        contentDescription = null,
+                        tint = BrandSky,
+                        modifier = Modifier.size(30.dp),
+                    )
+                }
+            }
+            Text(
+                text = "尚未建立任何監控規則",
+                style = MaterialTheme.typography.titleMedium,
+                color = TextPrimary,
+            )
+            Text(
+                text = "點擊右下角「+」加入台股（如 2330、0050）或美股（如 AAPL、NVDA），也可先至「資料與模擬」體驗測試通知流程。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextSecondary,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Button(
+                onClick = onAddClick,
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Add,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("新增第一檔監控")
+            }
+        }
+    }
+}
+
+@Composable
+private fun WatchlistRuleCard(
+    item: WatchlistItemUi,
+    onToggleEnabled: (Boolean) -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onResetTrigger: () -> Unit,
+    onQuickBuy: () -> Unit,
+) {
+    val rule: WatchlistRuleEntity = item.rule
+    val quote = item.quote
+    val eval = item.evaluation
+    val isTriggered = rule.isTriggered
+
+    val borderColor = when {
+        isTriggered -> AlertAmber
+        !rule.isEnabled -> HairlineBorder.copy(alpha = 0.5f)
+        else -> HairlineBorder
+    }
+
+    val cardBrush = if (isTriggered) {
+        Brush.verticalGradient(
+            colors = listOf(
+                AlertAmber.copy(alpha = 0.14f),
+                SurfaceCard,
+            )
+        )
+    } else {
+        Brush.verticalGradient(
+            colors = listOf(SurfaceCard, SurfaceCard)
+        )
+    }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("watchlist_card_${rule.id}"),
+        shape = RoundedCornerShape(18.dp),
+        color = SurfaceCard,
+        border = BorderStroke(if (isTriggered) 1.5.dp else 1.dp, borderColor),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(cardBrush)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            // Top Header Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            text = rule.displaySymbol,
+                            style = FinancialTextStyles.tickerBadge,
+                            color = BrandSky,
+                        )
+                        MarketBadge(currency = rule.currency)
+                        if (isTriggered) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = AlertAmberContainer,
+                                border = BorderStroke(1.dp, AlertAmber.copy(alpha = 0.5f)),
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.NotificationsActive,
+                                        contentDescription = "已觸及條件",
+                                        tint = AlertAmber,
+                                        modifier = Modifier.size(12.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "已觸及條件！",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = AlertAmber,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = rule.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = if (rule.isEnabled) TextPrimary else TextMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+
+                Switch(
+                    checked = rule.isEnabled,
+                    onCheckedChange = onToggleEnabled,
+                    modifier = Modifier.testTag("rule_switch_${rule.id}"),
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = CanvasObsidian,
+                        checkedTrackColor = BrandSky,
+                    ),
+                )
+            }
+
+            // Price & Moving Average Grid
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(SurfaceCardHigh.copy(alpha = 0.75f))
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column {
+                    Text(
+                        text = "目前現價",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                    )
+                    Text(
+                        text = quote?.let { Formatters.formatPrice(it.currentPrice, rule.currency) }
+                            ?: "尚無報價",
+                        style = FinancialTextStyles.priceLarge,
+                        color = TextPrimary,
+                    )
+                }
+
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = eval?.targetReferenceLabel ?: rule.condition.conditionDisplayName,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                    )
+                    Text(
+                        text = eval?.targetReferencePrice?.let {
+                            Formatters.formatPrice(it, rule.currency)
+                        } ?: "--",
+                        style = FinancialTextStyles.numericMedium,
+                        color = BrandSky,
+                    )
+                    val dist = eval?.distancePercent
+                    if (dist != null) {
+                        val isPositive = dist > 0.0001
+                        val pillColor = if (isPositive) TaiwanRed else TaiwanGreen
+                        val pillBg = if (isPositive) TaiwanRedContainer else TaiwanGreenContainer
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = pillBg,
+                        ) {
+                            Text(
+                                text = "距目標 ${Formatters.formatSignedPercent(dist)}",
+                                style = FinancialTextStyles.numericSmall,
+                                color = pillColor,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                            )
+                        }
+                    } else if (eval?.isInsufficientData == true) {
+                        Text(
+                            text = eval.statusMessage,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = AlertAmber,
+                        )
+                    }
+                }
+            }
+
+            // Condition & Planned Budget Strip
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "條件：${rule.condition.conditionDisplayName}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = TextSecondary,
+                    )
+                    val estStr = item.estimatedShares?.let {
+                        "（約 ${Formatters.formatShares(it)} 股）"
+                    }.orEmpty()
+                    Text(
+                        text = "預定買入：${Formatters.formatAmount(rule.plannedBuyAmount, rule.currency)}$estStr",
+                        style = FinancialTextStyles.numericSmall,
+                        color = TextPrimary,
+                    )
+                }
+
+                Row {
+                    IconButton(onClick = onEdit) {
+                        Icon(
+                            imageVector = Icons.Rounded.Edit,
+                            contentDescription = "編輯規則",
+                            tint = TextSecondary,
+                        )
+                    }
+                    IconButton(onClick = onDelete) {
+                        Icon(
+                            imageVector = Icons.Rounded.DeleteOutline,
+                            contentDescription = "刪除規則",
+                            tint = TextSecondary,
+                        )
+                    }
+                }
+            }
+
+            // Triggered Quick-Action Bar
+            AnimatedVisibility(visible = isTriggered) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    HorizontalDivider(color = AlertAmber.copy(alpha = 0.25f))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Button(
+                            onClick = onQuickBuy,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp)
+                                .testTag("quick_buy_button_${rule.id}"),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = AlertAmber,
+                                contentColor = CanvasObsidian,
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                        ) {
+                            Text(
+                                text = "立即記錄買入",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                        OutlinedButton(
+                            onClick = onResetTrigger,
+                            modifier = Modifier
+                                .height(48.dp)
+                                .testTag("reset_trigger_button_${rule.id}"),
+                            border = BorderStroke(1.dp, HairlineBorder),
+                            shape = RoundedCornerShape(12.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Refresh,
+                                contentDescription = "重置提醒狀態",
+                                modifier = Modifier.size(17.dp),
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("重置提醒")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
