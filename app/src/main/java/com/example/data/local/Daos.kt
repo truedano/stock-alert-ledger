@@ -33,6 +33,12 @@ interface WatchlistDao {
     @Query("DELETE FROM watchlist_rules WHERE id = :id")
     suspend fun deleteRuleById(id: Long)
 
+    @Query("DELETE FROM watchlist_rules")
+    suspend fun clearAllRules()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(rules: List<WatchlistRuleEntity>)
+
     @Query("UPDATE watchlist_rules SET isEnabled = :enabled WHERE id = :id")
     suspend fun setEnabled(id: Long, enabled: Boolean)
 
@@ -72,4 +78,13 @@ interface BuyRecordDao {
 
     @Query("DELETE FROM buy_records WHERE id = :id")
     suspend fun deleteRecordById(id: Long)
+
+    @Query("SELECT * FROM buy_records")
+    suspend fun getAllRecords(): List<BuyRecordEntity>
+
+    @Query("DELETE FROM buy_records")
+    suspend fun clearAllRecords()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(records: List<BuyRecordEntity>)
 }
