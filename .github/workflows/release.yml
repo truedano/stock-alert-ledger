@@ -36,13 +36,19 @@ jobs:
         run: |
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "Using production signing keystore from secrets"
-            echo "$KEYSTORE_BASE64" | base64 -d > "${{ github.workspace }}/my-upload-key.jks"
-            echo "keystore_path=${{ github.workspace }}/my-upload-key.jks" >> $GITHUB_OUTPUT
+            echo "$KEYSTORE_BASE64" | base64 -d > "${{ github.workspace }}/release.keystore"
+            echo "keystore_path=${{ github.workspace }}/release.keystore" >> $GITHUB_OUTPUT
             echo "store_password=${{ secrets.STORE_PASSWORD }}" >> $GITHUB_OUTPUT
             echo "key_alias=${{ secrets.KEY_ALIAS }}" >> $GITHUB_OUTPUT
             echo "key_password=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_OUTPUT
+          elif [ -f "${{ github.workspace }}/release.keystore" ]; then
+            echo "Using tracked permanent release keystore from repository"
+            echo "keystore_path=${{ github.workspace }}/release.keystore" >> $GITHUB_OUTPUT
+            echo "store_password=" >> $GITHUB_OUTPUT
+            echo "key_alias=release" >> $GITHUB_OUTPUT
+            echo "key_password=" >> $GITHUB_OUTPUT
           else
-            echo "No production keystore secret configured; falling back to temporary release key"
+            echo "Fallback to temporary release key"
             keytool -genkeypair -v \
               -keystore "${{ github.workspace }}/my-upload-key.jks" \
               -alias "upload" \
