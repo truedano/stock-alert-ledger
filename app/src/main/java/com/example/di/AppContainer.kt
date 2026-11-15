@@ -1,6 +1,7 @@
 package com.example.di
 
 import android.content.Context
+import com.example.data.backup.BackupRepository
 import com.example.data.local.AppDatabase
 import com.example.data.local.AppPreferencesRepository
 import com.example.data.remote.YahooFinanceService
@@ -17,6 +18,13 @@ class AppContainer(context: Context) {
     }
     val yahooFinanceService: YahooFinanceService by lazy { YahooFinanceService() }
     val updateManager: AppUpdateManager by lazy { AppUpdateManager(appContext) }
+    val backupRepository: BackupRepository by lazy {
+        BackupRepository(
+            context = appContext,
+            database = database,
+            preferencesRepository = preferencesRepository,
+        )
+    }
 
     val marketDataRepository: MarketDataRepository by lazy {
         MarketDataRepository(

@@ -97,6 +97,7 @@ class StockMonitorViewModel(
     private val marketRepo = container.marketDataRepository
     private val portfolioRepo = container.portfolioRepository
     private val prefsRepo = container.preferencesRepository
+    private val backupRepo = container.backupRepository
 
     private val _isRefreshing = MutableStateFlow(false)
     private val _hasRateLimitWarning = MutableStateFlow(false)
@@ -512,6 +513,41 @@ class StockMonitorViewModel(
         viewModelScope.launch {
             portfolioRepo.deleteRecord(recordId)
             _snackbarMessage.value = "已刪除該筆成交紀錄"
+        }
+    }
+
+    fun exportBackup(targetUri: android.net.Uri) {
+        viewModelScope.launch {
+            val result = backupRepo.exportToUri(targetUri)
+            if (result.isSuccess) {
+                _snackbarMessage.value = "備份檔案已成功匯出"
+            } else {
+                _snackbarMessage.value = "匯出失敗：${result.exceptionOrNull()?.localizedMessage ?: "未知錯誤"}"
+            }
+        }
+    }
+
+    suspend fun getShareableBackupUri(filename: String): android.net.Uri? {
+        val result = backupRepo.createShareableBackupUri(filename)
+        return if (result.isSuccess) {
+            result.getOrNull()
+        } else {
+            _snackbarMessage.value = "產生分享檔案失敗：${result.exceptionOrNull()?.localizedMessage ?: "未知錯誤"}"
+            null
+        }
+    }
+
+    fun importBackup(sourceUri: android.net.Uri) {
+        viewModelScope.launch {
+            when (val result = backupRepo.importFromUri(sourceUri)) {
+                is com.example.data.backup.BackupRestoreResult.Success -> {
+                    _snackbarMessage.value = "還原成功！已還原 ${result.rulesCount} 檔自選股與 ${result.recordsCount} 筆記帳"
+                    refreshAll(sendNotifications = false)
+                }
+                is com.example.data.backup.BackupRestoreResult.Error -> {
+                    _snackbarMessage.value = result.message
+                }
+            }
         }
     }
 

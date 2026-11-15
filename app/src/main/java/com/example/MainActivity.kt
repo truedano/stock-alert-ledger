@@ -71,6 +71,13 @@ import com.example.ui.theme.BrandSkyContainer
 import com.example.ui.theme.CanvasObsidian
 import com.example.ui.theme.StockAssistantTheme
 import com.example.ui.theme.SurfaceElevated
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.TextButton
+import com.example.ui.theme.TaiwanRed
+import com.example.ui.theme.TaiwanRedContainer
+import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
@@ -203,6 +210,20 @@ fun StockAssistantRoot(
 
     var showPortfolioRecordDialog by remember { mutableStateOf(false) }
     var editingRecord by remember { mutableStateOf<BuyRecordEntity?>(null) }
+
+    var pendingRestoreUri by remember { mutableStateOf<android.net.Uri?>(null) }
+
+    val exportBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        uri?.let { viewModel.exportBackup(it) }
+    }
+
+    val importBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let { pendingRestoreUri = it }
+    }
 
     val watchlistLabel = stringResource(R.string.tab_watchlist)
     val portfolioLabel = stringResource(R.string.tab_portfolio)
@@ -386,11 +407,68 @@ fun StockAssistantRoot(
         }
     }
 
+    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+
     // About App & Check Update Dialog
     if (showAboutDialog) {
         AboutAppDialog(
             onDismiss = { showAboutDialog = false },
             onCheckUpdate = onCheckForUpdate,
+            onExportBackup = {
+                val timestampStr = java.text.SimpleDateFormat("yyyyMMdd_HHmm", java.util.Locale.US).format(java.util.Date())
+                exportBackupLauncher.launch("StockAlertLedger_Backup_$timestampStr.json")
+            },
+            onShareBackup = {
+                val timestampStr = java.text.SimpleDateFormat("yyyyMMdd_HHmm", java.util.Locale.US).format(java.util.Date())
+                val filename = "StockAlertLedger_Backup_$timestampStr.json"
+                coroutineScope.launch {
+                    val uri = viewModel.getShareableBackupUri(filename) ?: return@launch
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "application/json"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(Intent.createChooser(shareIntent, "傳送或備份至雲端硬碟 / 郵件 / 通訊軟體"))
+                }
+            },
+            onImportBackup = {
+                importBackupLauncher.launch(arrayOf("application/json", "text/*", "*/*"))
+            },
+        )
+    }
+
+    // Confirm Restore Dialog
+    pendingRestoreUri?.let { restoreUri ->
+        AlertDialog(
+            onDismissRequest = { pendingRestoreUri = null },
+            title = {
+                Text(
+                    text = "確認還原備份資料？",
+                    color = TextPrimary
+                )
+            },
+            text = {
+                Text(
+                    text = "警告：匯入還原將會清除現有的自選監控股與記帳資料，並以備份檔內容完全覆蓋。此動作無法復原，是否繼續？",
+                    color = TextSecondary
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.importBackup(restoreUri)
+                        pendingRestoreUri = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = TaiwanRed)
+                ) {
+                    Text("確認覆蓋還原")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingRestoreUri = null }) {
+                    Text("取消")
+                }
+            }
         )
     }
 
