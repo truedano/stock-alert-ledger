@@ -77,4 +77,54 @@ class BackupSerializationTest {
         assertEquals(100.0, decodedRecord.shares, 0.001)
         assertEquals(100000.0, decodedRecord.totalCost, 0.001)
     }
+
+    @Test
+    fun `test forward compatibility when old backup lacks optional fields or has new fields`() {
+        // 模擬最精簡的舊版備份檔 JSON（甚至可能沒有 preferences 或未來的欄位）
+        val legacyJson = """
+            {
+                "version": 1,
+                "exportedAt": 1731672000000,
+                "appVersionName": "1.0.0",
+                "watchlistRules": [
+                    {
+                        "symbol": "AAPL",
+                        "displaySymbol": "AAPL",
+                        "name": "Apple Inc.",
+                        "currency": "USD",
+                        "condition": {
+                            "type": "moving_average",
+                            "periodDays": 60,
+                            "triggerMode": "below_or_equal",
+                            "tolerancePercent": 1.0
+                        },
+                        "plannedBuyAmount": 1000.0
+                    }
+                ],
+                "buyRecords": [
+                    {
+                        "symbol": "AAPL",
+                        "displaySymbol": "AAPL",
+                        "name": "Apple Inc.",
+                        "currency": "USD",
+                        "buyDate": "2026/11/15",
+                        "buyTimestamp": 1731672000000,
+                        "shares": 5.0,
+                        "unitPrice": 200.0,
+                        "totalCost": 1000.0,
+                        "triggerTag": "季線 60MA"
+                    }
+                ],
+                "extraFutureField": "should be safely ignored"
+            }
+        """.trimIndent()
+
+        val decoded = json.decodeFromString(AppBackupData.serializer(), legacyJson)
+        assertEquals(1, decoded.version)
+        assertEquals(1, decoded.watchlistRules.size)
+        val rule = decoded.watchlistRules[0]
+        assertEquals("AAPL", rule.symbol)
+        assertTrue(rule.isEnabled) // 驗證預設值作用正常
+        assertEquals(null, decoded.preferences) // 驗證可為空
+    }
 }
