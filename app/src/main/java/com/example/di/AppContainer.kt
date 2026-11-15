@@ -6,6 +6,7 @@ import com.example.data.local.AppPreferencesRepository
 import com.example.data.remote.YahooFinanceService
 import com.example.data.repository.MarketDataRepository
 import com.example.data.repository.PortfolioRepository
+import com.example.updater.AppUpdateManager
 
 class AppContainer(context: Context) {
     private val appContext = context.applicationContext
@@ -15,6 +16,7 @@ class AppContainer(context: Context) {
         AppPreferencesRepository(appContext)
     }
     val yahooFinanceService: YahooFinanceService by lazy { YahooFinanceService() }
+    val updateManager: AppUpdateManager by lazy { AppUpdateManager(appContext) }
 
     val marketDataRepository: MarketDataRepository by lazy {
         MarketDataRepository(

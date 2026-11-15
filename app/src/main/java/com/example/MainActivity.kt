@@ -54,11 +54,14 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.lifecycle.lifecycleScope
 import com.example.data.local.BuyRecordEntity
 import com.example.data.local.WatchlistRuleEntity
 import com.example.notification.StockNotificationHelper
 import com.example.ui.StockMonitorViewModel
+import com.example.ui.components.AboutAppDialog
 import com.example.ui.components.AddEditRuleDialog
+import com.example.ui.components.AppUpdateDialog
 import com.example.ui.components.BuyRecordDialog
 import com.example.ui.screens.PortfolioScreen
 import com.example.ui.screens.SimulatorScreen
@@ -69,6 +72,7 @@ import com.example.ui.theme.CanvasObsidian
 import com.example.ui.theme.StockAssistantTheme
 import com.example.ui.theme.SurfaceElevated
 import com.example.ui.theme.TextSecondary
+import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -93,6 +97,8 @@ class MainActivity : ComponentActivity() {
         StockMonitorViewModel.Factory(application)
     }
 
+    private val app by lazy { application as StockApplication }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
@@ -101,9 +107,38 @@ class MainActivity : ComponentActivity() {
         )
         handleNotificationIntent(intent)
 
+        // 啟動時非阻塞式檢查 GitHub Releases 是否有新版本
+        lifecycleScope.launch {
+            app.container.updateManager.checkForUpdates()
+        }
+
         setContent {
             StockAssistantTheme {
-                StockAssistantRoot(viewModel = viewModel)
+                val updateState by app.container.updateManager.uiState.collectAsStateWithLifecycle()
+
+                StockAssistantRoot(
+                    viewModel = viewModel,
+                    onCheckForUpdate = {
+                        lifecycleScope.launch {
+                            app.container.updateManager.checkForUpdates(isManual = true)
+                        }
+                    }
+                )
+
+                AppUpdateDialog(
+                    state = updateState,
+                    onStartDownload = { apkUrl ->
+                        lifecycleScope.launch {
+                            app.container.updateManager.downloadApk(apkUrl)
+                        }
+                    },
+                    onInstall = { apkFile ->
+                        app.container.updateManager.installApk(apkFile)
+                    },
+                    onDismiss = {
+                        app.container.updateManager.dismissUpdate()
+                    }
+                )
             }
         }
     }
@@ -127,6 +162,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun StockAssistantRoot(
     viewModel: StockMonitorViewModel,
+    onCheckForUpdate: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val navController = rememberNavController()
@@ -161,6 +197,7 @@ fun StockAssistantRoot(
     }
 
     // Dialog states
+    var showAboutDialog by remember { mutableStateOf(false) }
     var showAddEditRuleDialog by remember { mutableStateOf(false) }
     var editingRule by remember { mutableStateOf<WatchlistRuleEntity?>(null) }
 
@@ -312,6 +349,7 @@ fun StockAssistantRoot(
                             onDeleteRule = viewModel::deleteRule,
                             onResetTrigger = viewModel::resetRuleTrigger,
                             onQuickBuyClick = viewModel::openQuickBuyFromRule,
+                            onAboutAppClick = { showAboutDialog = true },
                         )
                     }
 
@@ -346,6 +384,14 @@ fun StockAssistantRoot(
                 }
             }
         }
+    }
+
+    // About App & Check Update Dialog
+    if (showAboutDialog) {
+        AboutAppDialog(
+            onDismiss = { showAboutDialog = false },
+            onCheckUpdate = onCheckForUpdate,
+        )
     }
 
     // Add / Edit Watchlist Rule Dialog
