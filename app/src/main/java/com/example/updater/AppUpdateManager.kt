@@ -74,7 +74,12 @@ class AppUpdateManager(
             }
         } catch (e: Exception) {
             if (isManual) {
-                _uiState.value = UpdateUiState.Error("檢查更新失敗: ${e.localizedMessage ?: "網路異常"}")
+                val errorMsg = if (e is retrofit2.HttpException && e.code() == 404) {
+                    "目前尚未發布任何公開 Release 版本，或 GitHub 儲存庫為私人狀態 (Private)。"
+                } else {
+                    "檢查更新失敗: ${e.localizedMessage ?: "網路異常"}"
+                }
+                _uiState.value = UpdateUiState.Error(errorMsg)
             } else {
                 _uiState.value = UpdateUiState.Idle
             }
