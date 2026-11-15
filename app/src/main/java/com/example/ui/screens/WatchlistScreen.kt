@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ShowChart
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Edit
@@ -86,6 +87,7 @@ fun WatchlistScreen(
     onDeleteRule: (Long) -> Unit,
     onResetTrigger: (Long) -> Unit,
     onQuickBuyClick: (WatchlistItemUi) -> Unit,
+    onAboutAppClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -130,17 +132,30 @@ fun WatchlistScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     item(key = "header_title") {
-                        Column {
-                            Text(
-                                text = "價格與指標監控",
-                                style = MaterialTheme.typography.headlineSmall,
-                                color = TextPrimary,
-                            )
-                            Text(
-                                text = "台股／美股即時追蹤，觸發價格或技術指標條件立即推播",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = TextSecondary,
-                            )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "價格與指標監控",
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    color = TextPrimary,
+                                )
+                                Text(
+                                    text = "台股／美股即時追蹤，觸發價格或技術指標條件立即推播",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = TextSecondary,
+                                )
+                            }
+                            IconButton(onClick = onAboutAppClick) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = "軟體資訊與檢查更新",
+                                    tint = BrandSky
+                                )
+                            }
                         }
                     }
 
