@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">股價監控與記帳</string>
+    <string name="notification_channel_name">股市條件買入提醒</string>
+    <string name="notification_channel_description">當台股或美股觸發設定的價格或技術指標買入條件時發送即時高優先權提醒。</string>
+    <string name="tab_watchlist">監控提醒</string>
+    <string name="tab_portfolio">成交與成本</string>
+    <string name="tab_simulator">資料與模擬</string>
+</resources>

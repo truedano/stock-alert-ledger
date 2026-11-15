@@ -1,0 +1,6 @@
+{
+  "name": "股價監控與記帳",
+  "description": "台股與美股價格與技術指標條件監控、即時提醒推播與多幣別成交記帳工具。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
