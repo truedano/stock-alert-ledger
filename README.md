@@ -16,11 +16,12 @@
 
 1. **台美雙市場報價與技術指標監控**
    - 支援台股代號（如 `2330.TW`、`0050.TW`）與美股代號（如 `AAPL`、`NVDA`）。
-   - 提供**均線監控**（週線 5MA、雙週線 10MA、月線 20MA、季線 60MA、半年線 120MA、年線 240MA）。
+   - 提供**均線監控**（短中長期均線：週線 5MA、雙週線 10MA、月線 20MA、季線 60MA、半年線 120MA、年線 240MA，以及長週期 3年線 720MA、5年線 1200MA、10年線 2400MA，支援最高 3000 天自訂週期）。
    - 觸發模式支援「跌破或觸及」以及「接近指定百分比範圍內（例如 ±1%）」。
 
-2. **背景排程與高優先級提醒**
+2. **背景排程與盤中高頻監控**
    - 透過 Android WorkManager 定期在背景檢查股價。
+   - **盤中每分鐘高頻前景常駐監控（v1.2.0+）**：支援啟動專屬 Foreground Service，以每 60 秒頻率即時輪詢股價與比對條件，滿足盤中極致即時性；App 關閉時自動停止釋放資源。
    - 達到條件時即刻發出高優先級通知，避免錯過買入佈局時機。
    - 智慧冷卻機制：同一條件在當日觸發後自動標註，避免重複騷擾。
 
@@ -77,11 +78,12 @@
 
 1. **Dual Market & Indicator Alerting**
    - Supports Taiwan stocks (`2330.TW`, `0050.TW`) and US equities (`AAPL`, `NVDA`, `TSLA`).
-   - Built-in **Moving Average Monitoring** (5MA, 10MA, 20MA, 60MA, 120MA, 240MA).
+   - Built-in **Moving Average Monitoring** (short, medium, and long-term: 5MA, 10MA, 20MA, 60MA, 120MA, 240MA, plus extended 3-year 720MA, 5-year 1200MA, and 10-year 2400MA; custom cycles up to 3000 days).
    - Alert triggers: "Drop below or touch" and "Within ±X% tolerance".
 
-2. **Background Monitoring & Priority Push**
+2. **Background Monitoring & Intraday High-Frequency Alerts**
    - Powered by Android WorkManager for periodic background market checking.
+   - **Intraday High-Frequency Foreground Service (v1.2.0+)**: Dedicated Foreground Service polling market quotes and evaluating conditions every 60 seconds; automatically terminates and cleans up when the app task is dismissed.
    - High-priority push notifications ensure you never miss buying opportunities.
    - Smart daily cooldown avoids duplicate alert spam on the same day.
 
