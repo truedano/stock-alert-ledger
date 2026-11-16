@@ -3,6 +3,7 @@ package com.example
 import android.app.Application
 import com.example.di.AppContainer
 import com.example.notification.StockNotificationHelper
+import com.example.service.StockMonitorForegroundService
 import com.example.worker.WorkScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -22,6 +23,9 @@ class StockApplication : Application() {
         appScope.launch {
             val prefs = container.preferencesRepository.getSnapshot()
             WorkScheduler.syncPeriodicCheck(this@StockApplication, prefs.backgroundCheckEnabled)
+            if (prefs.highFrequencyCheckEnabled) {
+                StockMonitorForegroundService.start(this@StockApplication)
+            }
         }
     }
 }

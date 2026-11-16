@@ -2,6 +2,10 @@
     <string name="app_name">股價監控與記帳</string>
     <string name="notification_channel_name">股市條件買入提醒</string>
     <string name="notification_channel_description">當台股或美股觸發設定的價格或技術指標買入條件時發送即時高優先權提醒。</string>
+    <string name="foreground_service_channel_name">即時監控常駐服務</string>
+    <string name="foreground_service_channel_description">盤中高頻即時監控股市價格與指標時的常駐通知。</string>
+    <string name="foreground_service_running_title">股價高頻監控中（每分鐘）</string>
+    <string name="foreground_service_running_desc">正在背景即時追蹤自選股指標與價格條件</string>
     <string name="tab_watchlist">監控提醒</string>
     <string name="tab_portfolio">成交與成本</string>
     <string name="tab_simulator">資料與模擬</string>

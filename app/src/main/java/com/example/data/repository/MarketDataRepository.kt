@@ -225,7 +225,6 @@ class MarketDataRepository(
         fallbackCurrency: MarketCurrency? = null,
     ): RefreshSummary = withContext(Dispatchers.IO) {
         val normalizedSymbol = symbol.trim().uppercase()
-        preferencesRepository.setDataSourceMode(DataSourceMode.SIMULATED)
         preferencesRepository.setSimulatedPrice(normalizedSymbol, newPrice)
 
         if (ensurePeriodRuleIfMissing != null) {

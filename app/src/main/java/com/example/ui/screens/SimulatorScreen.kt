@@ -30,6 +30,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -83,6 +84,7 @@ fun SimulatorScreen(
     onRequestNotificationPermission: () -> Unit,
     onDataSourceModeChange: (DataSourceMode) -> Unit,
     onBackgroundCheckToggle: (Boolean) -> Unit,
+    onHighFrequencyCheckToggle: (Boolean) -> Unit,
     onSimulatedPriceChange: (String, Double) -> Unit,
     onSimulateDropBelowLevel: (SimulatedStockUi, SimulatedTargetLevel?) -> Unit,
     onSendTestNotification: () -> Unit,
@@ -304,6 +306,37 @@ fun SimulatorScreen(
                                 color = TextPrimary,
                             )
                         }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "盤中每分鐘高頻監控 (前景常駐服務)",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = TextPrimary,
+                                )
+                                Text(
+                                    text = "切換到其他 App 或鎖定螢幕仍每 60 秒即時輪詢報價，達成最即時推播通知",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary,
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Switch(
+                                checked = uiState.highFrequencyCheckEnabled,
+                                onCheckedChange = onHighFrequencyCheckToggle,
+                                modifier = Modifier.testTag("high_frequency_service_switch"),
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = CanvasObsidian,
+                                    checkedTrackColor = BrandSky,
+                                ),
+                            )
+                        }
+
+                        HorizontalDivider(color = HairlineBorder.copy(alpha = 0.5f))
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
