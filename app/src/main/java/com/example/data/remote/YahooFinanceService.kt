@@ -72,7 +72,7 @@ class YahooFinanceService(
 
     private fun fetchSymbol(symbol: String): TickerLookupResult {
         val encoded = URLEncoder.encode(symbol, "UTF-8")
-        val url = "https://query1.finance.yahoo.com/v8/finance/chart/$encoded?range=1y&interval=1d"
+        val url = "https://query1.finance.yahoo.com/v8/finance/chart/$encoded?range=10y&interval=1d"
         val request = Request.Builder()
             .url(url)
             .header("User-Agent", BROWSER_USER_AGENT)

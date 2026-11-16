@@ -91,7 +91,7 @@ fun AddEditRuleDialog(
     ) -> Unit,
 ) {
     val initialCond = editingRule?.condition as? MovingAverageCondition
-    val presetPeriods = listOf(5, 10, 20, 60, 120, 240)
+    val presetPeriods = listOf(5, 10, 20, 60, 120, 240, 720, 1200, 2400)
     val initialPeriod = initialCond?.periodDays ?: 20
 
     var tickerInput by remember(editingRule) {
@@ -137,7 +137,7 @@ fun AddEditRuleDialog(
     val tolerance = toleranceText.toDoubleOrNull() ?: 1.0
 
     val canSave = (verifiedQuote != null || editingRule != null) &&
-        effectivePeriod in 1..500 &&
+        effectivePeriod in 1..3000 &&
         plannedAmount > 0.0 &&
         (triggerMode == MovingAverageTriggerMode.BELOW_OR_EQUAL || tolerance >= 0.0)
 
@@ -348,7 +348,7 @@ fun AddEditRuleDialog(
                     OutlinedTextField(
                         value = customPeriodText,
                         onValueChange = { customPeriodText = it.filter { ch -> ch.isDigit() } },
-                        label = { Text("自訂均線天數 (1~500)") },
+                        label = { Text("自訂均線天數 (1~3000)") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth(),

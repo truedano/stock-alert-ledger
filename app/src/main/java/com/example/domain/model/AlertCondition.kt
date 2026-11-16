@@ -47,6 +47,9 @@ data class MovingAverageCondition(
             60 -> "季線 60MA"
             120 -> "半年線 120MA"
             240 -> "年線 240MA"
+            720 -> "3年線 720MA"
+            1200 -> "5年線 1200MA"
+            2400 -> "10年線 2400MA"
             else -> "觸及 ${days}MA"
         }
     }
