@@ -38,7 +38,12 @@ class StockMonitorForegroundService : Service() {
                 startMonitoringLoop()
             }
         }
-        return START_STICKY
+        return START_NOT_STICKY
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        stopForegroundService()
     }
 
     private fun startForegroundWithNotification() {
