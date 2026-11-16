@@ -396,6 +396,7 @@ fun StockAssistantRoot(
                             onRequestNotificationPermission = requestNotificationPermission,
                             onDataSourceModeChange = viewModel::setDataSourceMode,
                             onBackgroundCheckToggle = viewModel::setBackgroundCheckEnabled,
+                            onHighFrequencyCheckToggle = viewModel::setHighFrequencyCheckEnabled,
                             onSimulatedPriceChange = viewModel::updateSimulatedPrice,
                             onSimulateDropBelowLevel = viewModel::simulateDropBelowLevel,
                             onSendTestNotification = viewModel::sendTestNotification,

@@ -25,6 +25,7 @@ import com.example.domain.model.StockQuote
 import com.example.domain.model.TickerLookupResult
 import com.example.notification.QuickBuyPrefill
 import com.example.notification.StockNotificationHelper
+import com.example.service.StockMonitorForegroundService
 import com.example.worker.WorkScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -64,6 +65,7 @@ data class SimulatedStockUi(
 data class WatchlistUiState(
     val dataSourceMode: DataSourceMode = DataSourceMode.REAL,
     val backgroundCheckEnabled: Boolean = true,
+    val highFrequencyCheckEnabled: Boolean = false,
     val lastSyncTimestamp: Long = 0L,
     val lastSyncMessage: String = "尚未同步報價",
     val isRefreshing: Boolean = false,
@@ -227,6 +229,7 @@ class StockMonitorViewModel(
         WatchlistUiState(
             dataSourceMode = prefs.dataSourceMode,
             backgroundCheckEnabled = prefs.backgroundCheckEnabled,
+            highFrequencyCheckEnabled = prefs.highFrequencyCheckEnabled,
             lastSyncTimestamp = prefs.lastSyncTimestamp,
             lastSyncMessage = prefs.lastSyncMessage,
             isRefreshing = refreshing,
@@ -390,6 +393,19 @@ class StockMonitorViewModel(
                 "已開啟每 15 分鐘背景定期檢查"
             } else {
                 "已關閉背景定期檢查"
+            }
+        }
+    }
+
+    fun setHighFrequencyCheckEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            prefsRepo.setHighFrequencyCheckEnabled(enabled)
+            if (enabled) {
+                StockMonitorForegroundService.start(app)
+                _snackbarMessage.value = "已啟動盤中每分鐘高頻常駐監控"
+            } else {
+                StockMonitorForegroundService.stop(app)
+                _snackbarMessage.value = "已停止盤中每分鐘高頻常駐監控"
             }
         }
     }

@@ -41,6 +41,8 @@ data class QuickBuyPrefill(
 
 object StockNotificationHelper {
     const val CHANNEL_ID = "stock_ma_buy_alerts"
+    const val FOREGROUND_CHANNEL_ID = "stock_ma_foreground_service"
+    const val FOREGROUND_NOTIFICATION_ID = 2001
     const val ACTION_QUICK_BUY_FROM_NOTIFICATION = "com.example.action.QUICK_BUY_FROM_NOTIFICATION"
 
     private const val PREFS_NOTIFICATION_GUARD = "notification_guard_prefs"
@@ -72,7 +74,43 @@ object StockNotificationHelper {
             }
             val manager = context.getSystemService(NotificationManager::class.java)
             manager?.createNotificationChannel(channel)
+
+            val fgChannel = NotificationChannel(
+                FOREGROUND_CHANNEL_ID,
+                context.getString(R.string.foreground_service_channel_name),
+                NotificationManager.IMPORTANCE_LOW,
+            ).apply {
+                description = context.getString(R.string.foreground_service_channel_description)
+                setShowBadge(false)
+            }
+            manager?.createNotificationChannel(fgChannel)
         }
+    }
+
+    fun buildForegroundNotification(context: Context, statusText: String? = null): Notification {
+        createNotificationChannel(context)
+        val title = context.getString(R.string.foreground_service_running_title)
+        val text = statusText ?: context.getString(R.string.foreground_service_running_desc)
+
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            0,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        return NotificationCompat.Builder(context, FOREGROUND_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification_trend)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .setContentIntent(pendingIntent)
+            .build()
     }
 
     fun hasNotificationPermission(context: Context): Boolean {
