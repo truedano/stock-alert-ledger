@@ -21,7 +21,7 @@
 
 2. **背景排程與盤中高頻監控**
    - 透過 Android WorkManager 定期在背景檢查股價。
-   - **盤中每分鐘高頻前景常駐監控（v1.2.0+）**：支援啟動專屬 Foreground Service，以每 60 秒頻率即時輪詢股價與比對條件，滿足盤中極致即時性；App 關閉時自動停止釋放資源。
+   - **盤中高頻前景常駐監控與自動節能（v1.2.0+, v1.3.0+）**：支援啟動專屬 Foreground Service，自選 15 秒、30 秒、1 分鐘或 5 分鐘即時輪詢股價與比對條件；結合台美股開休市智慧感知，休市期間自動降頻節能，並在非開盤時段智慧跳過 WorkManager 背景輪詢，大幅降低電量與網路消耗；App 關閉時自動停止釋放資源。
    - 達到條件時即刻發出高優先級通知，避免錯過買入佈局時機。
    - 智慧冷卻機制：同一條件在當日觸發後自動標註，避免重複騷擾。
 
@@ -83,7 +83,7 @@
 
 2. **Background Monitoring & Intraday High-Frequency Alerts**
    - Powered by Android WorkManager for periodic background market checking.
-   - **Intraday High-Frequency Foreground Service (v1.2.0+)**: Dedicated Foreground Service polling market quotes and evaluating conditions every 60 seconds; automatically terminates and cleans up when the app task is dismissed.
+   - **Intraday High-Frequency Foreground Service & Auto Power-Saving (v1.2.0+, v1.3.0+)**: Dedicated Foreground Service supporting customizable polling intervals (15s, 30s, 1m, 5m). Incorporates market session awareness to automatically throttle down polling during non-trading hours and skip WorkManager cycles when markets are closed, significantly reducing battery and data consumption; automatically terminates and cleans up when the app task is dismissed.
    - High-priority push notifications ensure you never miss buying opportunities.
    - Smart daily cooldown avoids duplicate alert spam on the same day.
 
