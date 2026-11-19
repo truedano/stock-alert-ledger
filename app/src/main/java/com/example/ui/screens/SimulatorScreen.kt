@@ -85,6 +85,7 @@ fun SimulatorScreen(
     onDataSourceModeChange: (DataSourceMode) -> Unit,
     onBackgroundCheckToggle: (Boolean) -> Unit,
     onHighFrequencyCheckToggle: (Boolean) -> Unit,
+    onHighFrequencyIntervalChange: (Int) -> Unit = {},
     onSimulatedPriceChange: (String, Double) -> Unit,
     onSimulateDropBelowLevel: (SimulatedStockUi, SimulatedTargetLevel?) -> Unit,
     onSendTestNotification: () -> Unit,
@@ -314,12 +315,12 @@ fun SimulatorScreen(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "盤中每分鐘高頻監控 (前景常駐服務)",
+                                    text = "盤中高頻監控 (前景常駐服務)",
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = TextPrimary,
                                 )
                                 Text(
-                                    text = "切換到其他 App 或鎖定螢幕仍每 60 秒即時輪詢報價，達成最即時推播通知",
+                                    text = "於交易時段在背景以設定頻率即時巡檢，非開盤時段自動休眠待命",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = TextSecondary,
                                 )
@@ -334,6 +335,64 @@ fun SimulatorScreen(
                                     checkedTrackColor = BrandSky,
                                 ),
                             )
+                        }
+
+                        if (uiState.highFrequencyCheckEnabled) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Text(
+                                    text = "盤中巡檢頻率選擇：",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = TextSecondary,
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    val intervals = listOf(
+                                        15 to "15 秒 (極速)",
+                                        30 to "30 秒 (快速)",
+                                        60 to "1 分鐘 (標準)",
+                                        300 to "5 分鐘 (節能)",
+                                    )
+                                    intervals.forEach { (sec, label) ->
+                                        val isSelected = uiState.highFrequencyIntervalSeconds == sec
+                                        FilterChip(
+                                            selected = isSelected,
+                                            onClick = { onHighFrequencyIntervalChange(sec) },
+                                            label = {
+                                                Text(
+                                                    text = label,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                )
+                                            },
+                                            colors = FilterChipDefaults.filterChipColors(
+                                                selectedContainerColor = BrandSkyContainer,
+                                                selectedLabelColor = BrandSky,
+                                                containerColor = SurfaceCardHigh,
+                                                labelColor = TextSecondary,
+                                            ),
+                                            border = if (isSelected) {
+                                                BorderStroke(1.dp, BrandSky)
+                                            } else {
+                                                BorderStroke(1.dp, HairlineBorder)
+                                            },
+                                        )
+                                    }
+                                }
+                                if (uiState.highFrequencyIntervalSeconds <= 30 && uiState.items.size > 5) {
+                                    Text(
+                                        text = "⚠️ 目前自選股較多 (${uiState.items.size} 檔)，極速模式頻繁請求可能增加受到資料源頻率限制的風險。",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = AlertAmber,
+                                    )
+                                }
+                            }
                         }
 
                         HorizontalDivider(color = HairlineBorder.copy(alpha = 0.5f))

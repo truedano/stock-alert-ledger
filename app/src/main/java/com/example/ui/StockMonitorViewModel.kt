@@ -66,6 +66,7 @@ data class WatchlistUiState(
     val dataSourceMode: DataSourceMode = DataSourceMode.REAL,
     val backgroundCheckEnabled: Boolean = true,
     val highFrequencyCheckEnabled: Boolean = false,
+    val highFrequencyIntervalSeconds: Int = 60,
     val lastSyncTimestamp: Long = 0L,
     val lastSyncMessage: String = "尚未同步報價",
     val isRefreshing: Boolean = false,
@@ -230,6 +231,7 @@ class StockMonitorViewModel(
             dataSourceMode = prefs.dataSourceMode,
             backgroundCheckEnabled = prefs.backgroundCheckEnabled,
             highFrequencyCheckEnabled = prefs.highFrequencyCheckEnabled,
+            highFrequencyIntervalSeconds = prefs.highFrequencyIntervalSeconds,
             lastSyncTimestamp = prefs.lastSyncTimestamp,
             lastSyncMessage = prefs.lastSyncMessage,
             isRefreshing = refreshing,
@@ -402,11 +404,25 @@ class StockMonitorViewModel(
             prefsRepo.setHighFrequencyCheckEnabled(enabled)
             if (enabled) {
                 StockMonitorForegroundService.start(app)
-                _snackbarMessage.value = "已啟動盤中每分鐘高頻常駐監控"
+                _snackbarMessage.value = "已啟動盤中高頻常駐監控"
             } else {
                 StockMonitorForegroundService.stop(app)
-                _snackbarMessage.value = "已停止盤中每分鐘高頻常駐監控"
+                _snackbarMessage.value = "已停止盤中高頻常駐監控"
             }
+        }
+    }
+
+    fun setHighFrequencyInterval(seconds: Int) {
+        viewModelScope.launch {
+            prefsRepo.setHighFrequencyIntervalSeconds(seconds)
+            val label = when (seconds) {
+                15 -> "15 秒 (極速)"
+                30 -> "30 秒 (快速)"
+                60 -> "1 分鐘 (標準)"
+                300 -> "5 分鐘 (節能)"
+                else -> "${seconds}秒"
+            }
+            _snackbarMessage.value = "已將盤中巡檢頻率設定為 $label"
         }
     }
 

@@ -36,6 +36,14 @@ class MarketDataRepository(
     val rulesFlow: Flow<List<WatchlistRuleEntity>> = watchlistDao.observeAllRules()
     val cachedQuotesFlow: Flow<List<CachedQuoteEntity>> = cachedQuoteDao.observeAllQuotes()
 
+    suspend fun getEnabledSymbols(): List<String> = withContext(Dispatchers.IO) {
+        watchlistDao.getEnabledRules().map { it.symbol }.distinct()
+    }
+
+    suspend fun getPreferencesSnapshot() = withContext(Dispatchers.IO) {
+        preferencesRepository.getSnapshot()
+    }
+
     suspend fun lookupTicker(rawInput: String): TickerLookupResult = withContext(Dispatchers.IO) {
         val prefs = preferencesRepository.getSnapshot()
         if (prefs.dataSourceMode == DataSourceMode.SIMULATED) {

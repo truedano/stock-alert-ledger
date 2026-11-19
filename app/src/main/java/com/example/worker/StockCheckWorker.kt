@@ -13,7 +13,20 @@ class StockCheckWorker(
     override suspend fun doWork(): Result {
         val app = applicationContext as? StockApplication ?: return Result.failure()
         return try {
-            app.container.marketDataRepository.refreshAllEnabledRules(sendNotifications = true)
+            val repo = app.container.marketDataRepository
+            val prefs = repo.getPreferencesSnapshot()
+            val isSimulated = prefs.dataSourceMode == com.example.domain.model.DataSourceMode.SIMULATED
+
+            // During real mode, if all markets are closed, skip background worker execution to save battery
+            if (!isSimulated) {
+                val symbols = repo.getEnabledSymbols()
+                val isMarketOpen = com.example.domain.model.MarketSessionChecker.isAnyMarketOpen(symbols)
+                if (!isMarketOpen) {
+                    return Result.success()
+                }
+            }
+
+            repo.refreshAllEnabledRules(sendNotifications = true)
             Result.success()
         } catch (_: Exception) {
             Result.retry()

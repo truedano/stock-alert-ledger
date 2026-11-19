@@ -76,8 +76,22 @@ class StockMonitorForegroundService : Service() {
 
             while (isActive) {
                 try {
+                    val symbols = repo.getEnabledSymbols()
+                    val prefs = repo.getPreferencesSnapshot()
+                    val isSimulated = prefs.dataSourceMode == com.example.domain.model.DataSourceMode.SIMULATED
+                    val isMarketOpen = com.example.domain.model.MarketSessionChecker.isAnyMarketOpen(symbols)
+
                     val summary = repo.refreshAllEnabledRules(sendNotifications = true)
-                    val statusText = "盤中每分鐘巡檢：${summary.statusMessage}"
+                    val intervalSec = prefs.highFrequencyIntervalSeconds
+                    val intervalText = if (intervalSec < 60) "${intervalSec}秒" else "${intervalSec / 60}分鐘"
+                    val modePrefix = if (isSimulated) {
+                        "模擬模式巡檢"
+                    } else if (isMarketOpen) {
+                        "盤中巡檢（每$intervalText）"
+                    } else {
+                        "盤後待命（每15分）"
+                    }
+                    val statusText = "$modePrefix：${summary.statusMessage}"
                     val updatedNotification = StockNotificationHelper.buildForegroundNotification(
                         context = this@StockMonitorForegroundService,
                         statusText = statusText,
@@ -86,14 +100,19 @@ class StockMonitorForegroundService : Service() {
                         StockNotificationHelper.FOREGROUND_NOTIFICATION_ID,
                         updatedNotification,
                     )
+
+                    val delayMs = com.example.domain.model.MarketSessionChecker.getSuggestedPollingDelayMs(
+                        symbols = symbols,
+                        isSimulatedMode = isSimulated,
+                        userIntervalSeconds = intervalSec,
+                    )
+                    delay(delayMs)
                 } catch (_: CancellationException) {
                     break
                 } catch (_: Exception) {
-                    // Ignore transient network errors and continue next loop
+                    // Ignore transient network errors and wait standard interval
+                    delay(60_000L)
                 }
-
-                // Poll every 60 seconds (1 minute interval)
-                delay(60_000L)
             }
         }
     }
