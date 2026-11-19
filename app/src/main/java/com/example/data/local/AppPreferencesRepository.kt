@@ -24,6 +24,7 @@ data class AppPreferencesState(
     val dataSourceMode: DataSourceMode = DataSourceMode.REAL,
     val backgroundCheckEnabled: Boolean = true,
     val highFrequencyCheckEnabled: Boolean = false,
+    val highFrequencyIntervalSeconds: Int = 60,
     val lastSyncTimestamp: Long = 0L,
     val lastSyncMessage: String = "尚未同步報價",
     val simulatedPrices: Map<String, Double> = emptyMap(),
@@ -38,6 +39,7 @@ class AppPreferencesRepository(private val context: Context) {
         val DATA_SOURCE_MODE = stringPreferencesKey("data_source_mode")
         val BACKGROUND_CHECK_ENABLED = booleanPreferencesKey("background_check_enabled")
         val HIGH_FREQUENCY_CHECK_ENABLED = booleanPreferencesKey("high_frequency_check_enabled")
+        val HIGH_FREQUENCY_INTERVAL_SECONDS = androidx.datastore.preferences.core.intPreferencesKey("high_frequency_interval_seconds")
         val LAST_SYNC_TIMESTAMP = longPreferencesKey("last_sync_timestamp")
         val LAST_SYNC_MESSAGE = stringPreferencesKey("last_sync_message")
         val SIMULATED_PRICES_JSON = stringPreferencesKey("simulated_prices_json")
@@ -64,6 +66,7 @@ class AppPreferencesRepository(private val context: Context) {
             dataSourceMode = mode,
             backgroundCheckEnabled = prefs[Keys.BACKGROUND_CHECK_ENABLED] ?: true,
             highFrequencyCheckEnabled = prefs[Keys.HIGH_FREQUENCY_CHECK_ENABLED] ?: false,
+            highFrequencyIntervalSeconds = prefs[Keys.HIGH_FREQUENCY_INTERVAL_SECONDS] ?: 60,
             lastSyncTimestamp = prefs[Keys.LAST_SYNC_TIMESTAMP] ?: 0L,
             lastSyncMessage = prefs[Keys.LAST_SYNC_MESSAGE] ?: "尚未同步報價",
             simulatedPrices = simPrices,
@@ -87,6 +90,13 @@ class AppPreferencesRepository(private val context: Context) {
     suspend fun setHighFrequencyCheckEnabled(enabled: Boolean) {
         context.appDataStore.edit { prefs ->
             prefs[Keys.HIGH_FREQUENCY_CHECK_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setHighFrequencyIntervalSeconds(seconds: Int) {
+        val valid = seconds.coerceIn(15, 600)
+        context.appDataStore.edit { prefs ->
+            prefs[Keys.HIGH_FREQUENCY_INTERVAL_SECONDS] = valid
         }
     }
 
