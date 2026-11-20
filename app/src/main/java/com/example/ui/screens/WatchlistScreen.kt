@@ -189,6 +189,7 @@ fun WatchlistScreen(
                         items(
                             items = uiState.items,
                             key = { it.rule.id },
+                            contentType = { "watchlist_rule_card" },
                         ) { item ->
                             WatchlistRuleCard(
                                 item = item,
@@ -403,68 +404,75 @@ private fun WatchlistRuleCard(
                     )
                 }
 
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = eval?.targetReferenceLabel ?: rule.condition.conditionDisplayName,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextSecondary,
-                    )
-                    Text(
-                        text = when {
-                            rule.condition is com.example.domain.model.RsiCondition ||
-                            rule.condition is com.example.domain.model.MarginMaintenanceCondition -> {
-                                eval?.targetReferencePrice?.let {
-                                    "${String.format(java.util.Locale.US, "%.1f", it)}%"
-                                } ?: "--"
-                            }
-                            else -> {
-                                eval?.targetReferencePrice?.let {
-                                    Formatters.formatPrice(it, rule.currency)
-                                } ?: "--"
-                            }
-                        },
-                        style = FinancialTextStyles.numericMedium,
-                        color = BrandSky,
-                    )
-                    val dist = eval?.distancePercent
-                    if (dist != null) {
-                        val isPositive = dist > 0.0001
-                        val pillColor = if (isPositive) TaiwanRed else TaiwanGreen
-                        val pillBg = if (isPositive) TaiwanRedContainer else TaiwanGreenContainer
-                        Spacer(modifier = Modifier.height(3.dp))
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = pillBg,
-                        ) {
-                            val distLabel = when (rule.condition) {
-                                is com.example.domain.model.RsiCondition -> {
-                                    val sign = if (dist > 0) "+" else ""
-                                    "差額 $sign${String.format(java.util.Locale.US, "%.1f", dist)}"
-                                }
-                                is com.example.domain.model.MarginMaintenanceCondition -> {
-                                    val sign = if (dist > 0) "+" else ""
-                                    "反彈 $sign${String.format(java.util.Locale.US, "%.1f", dist)} 點"
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = when (rule.condition) {
+                                is com.example.domain.model.PriceTargetCondition -> "目標價"
+                                else -> eval?.targetReferenceLabel ?: rule.condition.conditionDisplayName
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextSecondary,
+                        )
+                        Text(
+                            text = when {
+                                rule.condition is com.example.domain.model.RsiCondition ||
+                                rule.condition is com.example.domain.model.MarginMaintenanceCondition -> {
+                                    eval?.targetReferencePrice?.let {
+                                        "${String.format(java.util.Locale.US, "%.1f", it)}%"
+                                    } ?: "--"
                                 }
                                 else -> {
-                                    "距目標 ${Formatters.formatSignedPercent(dist)}"
+                                    eval?.targetReferencePrice?.let {
+                                        Formatters.formatPrice(it, rule.currency)
+                                    } ?: "--"
                                 }
+                            },
+                            style = FinancialTextStyles.numericMedium,
+                            color = BrandSky,
+                        )
+                        val dist = eval?.distancePercent
+                        if (dist != null) {
+                            val isPositive = dist > 0.0001
+                            val pillColor = if (isPositive) TaiwanRed else TaiwanGreen
+                            val pillBg = if (isPositive) TaiwanRedContainer else TaiwanGreenContainer
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = pillBg,
+                            ) {
+                                val distLabel = when (rule.condition) {
+                                    is com.example.domain.model.RsiCondition -> {
+                                        val sign = if (dist > 0) "+" else ""
+                                        "差額 $sign${String.format(java.util.Locale.US, "%.1f", dist)}"
+                                    }
+                                    is com.example.domain.model.MarginMaintenanceCondition -> {
+                                        val sign = if (dist > 0) "+" else ""
+                                        "反彈 $sign${String.format(java.util.Locale.US, "%.1f", dist)} 點"
+                                    }
+                                    else -> {
+                                        val prefix = when {
+                                            rule.condition is com.example.domain.model.PriceTargetCondition -> "距目標 "
+                                            else -> "距MA "
+                                        }
+                                        "$prefix${Formatters.formatSignedPercent(dist)}"
+                                    }
+                                }
+                                Text(
+                                    text = distLabel,
+                                    style = FinancialTextStyles.numericSmall,
+                                    color = pillColor,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                )
                             }
+                        } else if (eval?.isInsufficientData == true) {
                             Text(
-                                text = distLabel,
-                                style = FinancialTextStyles.numericSmall,
-                                color = pillColor,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                text = eval.statusMessage,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = AlertAmber,
                             )
                         }
-                    } else if (eval?.isInsufficientData == true) {
-                        Text(
-                            text = eval.statusMessage,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = AlertAmber,
-                        )
                     }
-                }
             }
 
             // Condition & Planned Budget Strip
