@@ -52,3 +52,13 @@ data class MarketMarginSnapshot(
     val exeAccNum: Long,
     val recentKeepRates: List<Double>,
 )
+
+data class StockMarginInfo(
+    val symbol: String,
+    val name: String,
+    val marginBalance: Long, // 融資今日餘額 (張)
+    val marginChange: Long,  // 融資今日增減 (張，今日 - 前日)
+    val shortBalance: Long,  // 融券今日餘額 (張)
+    val shortChange: Long,   // 融券今日增減 (張，今日 - 前日)
+    val estimatedKeepRate: Double? = null, // 推估融資維持率 (%)
+)

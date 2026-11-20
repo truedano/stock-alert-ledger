@@ -21,6 +21,7 @@ data class StockQuote(
     val closeHistory: List<Double>,
     val lastUpdatedAt: Long,
     val isSimulated: Boolean,
+    val marginInfo: com.example.data.remote.StockMarginInfo? = null,
 )
 
 sealed interface TickerLookupResult {
