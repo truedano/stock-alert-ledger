@@ -14,9 +14,12 @@
 
 ### ✨ 核心功能
 
-1. **台美雙市場報價與技術指標監控**
+1. **台美雙市場報價與全方位策略條件監控（v1.4.0+）**
    - 支援台股代號（如 `2330.TW`、`0050.TW`）與美股代號（如 `AAPL`、`NVDA`）。
-   - 提供**均線監控**（短中長期均線：週線 5MA、雙週線 10MA、月線 20MA、季線 60MA、半年線 120MA、年線 240MA，以及長週期 3年線 720MA、5年線 1200MA、10年線 2400MA，支援最高 3000 天自訂週期）。
+   - **多元均線監控**：短中長期均線（週線 5MA、雙週線 10MA、月線 20MA、季線 60MA、半年線 120MA、年線 240MA，以及長週期 3年線 720MA、5年線 1200MA、10年線 2400MA，支援最高 3000 天自訂週期）。
+   - **波段高點回撤抄底（Peak Drawdown）**：支援自訂回溯天數（如 60 日、120 日）與自波段最高價下跌百分比（如回撤 -10%、-20%），精準捕捉右側抄底或逢低佈局買點。
+   - **RSI 技術指標警示**：計算自訂週期 RSI（預設 14 日），支援「跌破超賣區 (RSI < 30)」恐慌撿便宜或「突破超買區 (RSI > 70)」獲利調節提醒。
+   - **證交所全市場融資維持率監控**：即時爬取 TWSE 整戶擔保維持率，支援設定恐慌維持率門檻（如 150%）搭配反彈點數（如反彈 20 點）觸發黃金抄底警示，並提供出場安全停泊警戒模式。
    - 觸發模式支援「跌破或觸及」以及「接近指定百分比範圍內（例如 ±1%）」。
 
 2. **背景排程與盤中高頻監控**
@@ -76,9 +79,12 @@
 
 ### ✨ Key Features
 
-1. **Dual Market & Indicator Alerting**
+1. **Dual Market & Multi-Strategy Alerting (v1.4.0+)**
    - Supports Taiwan stocks (`2330.TW`, `0050.TW`) and US equities (`AAPL`, `NVDA`, `TSLA`).
-   - Built-in **Moving Average Monitoring** (short, medium, and long-term: 5MA, 10MA, 20MA, 60MA, 120MA, 240MA, plus extended 3-year 720MA, 5-year 1200MA, and 10-year 2400MA; custom cycles up to 3000 days).
+   - **Moving Average Monitoring**: short, medium, and long-term MAs (5MA, 10MA, 20MA, 60MA, 120MA, 240MA, plus extended 3-year 720MA, 5-year 1200MA, and 10-year 2400MA; custom cycles up to 3000 days).
+   - **Peak Drawdown Bottom-Fishing**: Tracks drawdown percentage (e.g., -10%, -20%) from recent swing highs within customizable lookback days to catch dip-buying opportunities.
+   - **RSI Technical Indicator**: Customizable RSI period (default 14 days), alerting on oversold zones (RSI < 30) for bargain hunting or overbought levels (RSI > 70) for profit taking.
+   - **TWSE Market Margin Maintenance Rate**: Directly tracks Taiwan Stock Exchange credit margin keep rates, triggering buy signals when bouncing off panic levels (e.g., <=150% rebounding +20 pts) or alerting safe exits.
    - Alert triggers: "Drop below or touch" and "Within ±X% tolerance".
 
 2. **Background Monitoring & Intraday High-Frequency Alerts**
