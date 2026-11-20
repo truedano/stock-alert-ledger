@@ -78,11 +78,11 @@ import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 
 enum class RuleConditionCategory(val title: String) {
-    PRICE_TARGET("目標價"),
-    MOVING_AVERAGE("均線 (SMA)"),
-    PEAK_DRAWDOWN("波段回撤"),
-    RSI("RSI 指標"),
-    MARGIN("融資維持率"),
+    PRICE_TARGET("🎯 目標價"),
+    MOVING_AVERAGE("📈 均線 (SMA)"),
+    PEAK_DRAWDOWN("📉 波段回撤"),
+    RSI("⚡ RSI 指標"),
+    MARGIN("🏦 融資維持率"),
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -105,11 +105,11 @@ fun AddEditRuleDialog(
 ) {
     val initialCond = editingRule?.condition
     val initialCategory = when (initialCond) {
-        is com.example.domain.model.PriceTargetCondition -> RuleConditionCategory.PRICE_TARGET
+        is MovingAverageCondition -> RuleConditionCategory.MOVING_AVERAGE
         is PeakDrawdownCondition -> RuleConditionCategory.PEAK_DRAWDOWN
         is RsiCondition -> RuleConditionCategory.RSI
         is com.example.domain.model.MarginMaintenanceCondition -> RuleConditionCategory.MARGIN
-        else -> RuleConditionCategory.MOVING_AVERAGE
+        else -> RuleConditionCategory.PRICE_TARGET
     }
     var selectedCategory by remember(editingRule) { mutableStateOf(initialCategory) }
 
@@ -281,7 +281,10 @@ fun AddEditRuleDialog(
                         value = tickerInput,
                         onValueChange = { tickerInput = it },
                         label = { Text("股票代號 (如 2330 或 AAPL)") },
-                        placeholder = { Text("台股免填 .TW/.TWO") },
+                        placeholder = { Text("支援台股/美股自動辨識") },
+                        supportingText = if (editingRule == null) {
+                            { Text("台股數字代號自動辨識上市櫃；美股直接輸入代號", style = MaterialTheme.typography.labelSmall) }
+                        } else null,
                         singleLine = true,
                         enabled = editingRule == null,
                         keyboardOptions = KeyboardOptions(
@@ -391,15 +394,7 @@ fun AddEditRuleDialog(
                             )
                         }
                     }
-                    else -> {
-                        if (editingRule == null) {
-                            Text(
-                                text = "輸入台股數字代號（例如 2330、0050、6488）將自動辨識上市 .TW / 上櫃 .TWO；美股輸入英文代號（如 AAPL、NVDA）即可。",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = TextSecondary,
-                            )
-                        }
-                    }
+                    else -> {}
                 }
 
                 // 策略類型切換 Tabs
@@ -440,7 +435,7 @@ fun AddEditRuleDialog(
                             FilterChip(
                                 selected = targetDirection == com.example.domain.model.PriceTargetDirection.BELOW_OR_EQUAL,
                                 onClick = { targetDirection = com.example.domain.model.PriceTargetDirection.BELOW_OR_EQUAL },
-                                label = { Text("跌破或觸及 (≤)") },
+                                label = { Text("跌破/觸及 (≤ 逢低買)") },
                                 modifier = Modifier.weight(1f),
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = BrandSkyContainer,
@@ -450,7 +445,7 @@ fun AddEditRuleDialog(
                             FilterChip(
                                 selected = targetDirection == com.example.domain.model.PriceTargetDirection.ABOVE_OR_EQUAL,
                                 onClick = { targetDirection = com.example.domain.model.PriceTargetDirection.ABOVE_OR_EQUAL },
-                                label = { Text("突破或觸及 (≥)") },
+                                label = { Text("突破/觸及 (≥ 停利追價)") },
                                 modifier = Modifier.weight(1f),
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = BrandSkyContainer,
@@ -462,7 +457,7 @@ fun AddEditRuleDialog(
                         OutlinedTextField(
                             value = targetPriceText,
                             onValueChange = { targetPriceText = it },
-                            label = { Text("目標價 (${activeCurrency.prefix})") },
+                            label = { Text("設定目標價 (${activeCurrency.prefix})") },
                             prefix = { Text("${activeCurrency.prefix} ") },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -497,7 +492,15 @@ fun AddEditRuleDialog(
                         OutlinedTextField(
                             value = targetToleranceText,
                             onValueChange = { targetToleranceText = it },
-                            label = { Text("接近提醒容許百分比 (±% 內提前提醒，0 表示不提前)") },
+                            label = { Text("接近預警容許度 (±%)") },
+                            placeholder = { Text("0 表示剛好到達才提醒") },
+                            supportingText = {
+                                Text(
+                                    text = if (targetToleranceText.toDoubleOrNull() ?: 0.0 > 0.0) "距離目標價 ±$targetToleranceText% 時提前預警"
+                                    else "0 表示到達或穿越目標價時提醒",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            },
                             suffix = { Text("%") },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -511,12 +514,12 @@ fun AddEditRuleDialog(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "觸發一次後自動停用/完成",
+                                    text = "觸發一次後自動停用",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = TextPrimary,
                                 )
                                 Text(
-                                    text = "目標價通常為特定買點或停利點，發送提醒後自動關閉避免重複打擾",
+                                    text = "發送通知後自動標為完成並停用，避免重複提醒",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = TextSecondary,
                                 )
