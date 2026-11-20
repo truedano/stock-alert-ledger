@@ -1,6 +1,7 @@
 # 股價監控與記帳助理 (Stock Alert & Ledger)
 
-[![Android CI & Release Build](https://github.com/truedano/stock-alert-ledger/actions/workflows/android-release.yml/badge.svg)](https://github.com/truedano/stock-alert-ledger/actions)
+[![Android CI](https://github.com/truedano/stock-alert-ledger/actions/workflows/ci.yml/badge.svg)](https://github.com/truedano/stock-alert-ledger/actions/workflows/ci.yml)
+[![Build & Release APK](https://github.com/truedano/stock-alert-ledger/actions/workflows/release.yml/badge.svg)](https://github.com/truedano/stock-alert-ledger/actions/workflows/release.yml)
 [![Latest Release](https://img.shields.io/github/v/release/truedano/stock-alert-ledger)](https://github.com/truedano/stock-alert-ledger/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -10,17 +11,21 @@
 
 ## 繁體中文
 
-**股價監控與記帳助理** 是一款專為台股（TW）與美股（US）投資人打造的 Android 本地端工具。結合了**即時技術指標條件監控**、**高優先級通知提醒**、**一鍵快速買入成交記帳**與**完整的離線備份/還原**功能。無須註冊帳號、無第三方伺服器蒐集資料，所有資產資料與規則均妥善儲存在手機本地。
+**股價監控與記帳助理** 是一款專為台股（TW）與美股（US）投資人打造的 Android 本地端工具。結合了**即時技術指標條件監控**、**市場宏觀情緒看板**、**高優先級通知提醒**、**一鍵快速買入成交記帳**與**完整的離線備份/還原**功能。無須註冊帳號、無第三方伺服器蒐集資料，所有資產資料與規則均妥善儲存在手機本地。
 
 ### ✨ 核心功能
 
-1. **台美雙市場報價與全方位策略條件監控（v1.4.0+, v1.5.0+）**
+1. **台美雙市場報價與全方位策略條件監控（v1.4.0+, v1.5.0+, v1.6.0+）**
    - 支援台股代號（如 `2330.TW`、`0050.TW`）與美股代號（如 `AAPL`、`NVDA`）。
+   - **台美市場宏觀指標與市場氛圍看板（v1.6.0+）**：
+     - **美股 CNN 恐懼與貪婪指數 (Fear & Greed Index)**：即時連線 CNN 抓取多維度市場情緒指數（0-100分），劃分「極度恐慌、恐慌、中立、貪婪、極度貪婪」狀態並提供歷史走勢圖與情緒解讀。
+     - **台股證交所全市場融資維持率**：即時爬取 TWSE 整戶擔保維持率，支援設定恐慌維持率門檻（如 150%）搭配反彈點數（如反彈 20 點）觸發黃金抄底警示，並提供出場安全停泊警戒模式。
+     - **個股信用交易與推估維持率看板（v1.6.0+）**：台股個股即時顯示最新融資融券增減張數、餘額，以及個股推估融資維持率與警戒標籤。
+     - **指標說明彈窗**：提供宏觀溫度計卡片指標說明彈窗，解析數值意義與實務投資操作參考建議。
    - **絕對目標價警示（v1.5.0+）**：支援設定精準目標價買進或停利提醒，具備「跌破/觸及」或「突破/觸及」方向判定、容許偏差範圍，以及觸發後自動停用規則機制；提供現價快捷百分比換算晶片輔助輸入。
    - **多元均線監控**：短中長期均線（週線 5MA、雙週線 10MA、月線 20MA、季線 60MA、半年線 120MA、年線 240MA，以及長週期 3年線 720MA、5年線 1200MA、10年線 2400MA，支援最高 3000 天自訂週期）。
    - **波段高點回撤抄底（Peak Drawdown）**：支援自訂回溯天數（如 60 日、120 日）與自波段最高價下跌百分比（如回撤 -10%、-20%），精準捕捉右側抄底或逢低佈局買點。
    - **RSI 技術指標警示**：計算自訂週期 RSI（預設 14 日），支援「跌破超賣區 (RSI < 30)」恐慌撿便宜或「突破超買區 (RSI > 70)」獲利調節提醒。
-   - **證交所全市場融資維持率監控**：即時爬取 TWSE 整戶擔保維持率，支援設定恐慌維持率門檻（如 150%）搭配反彈點數（如反彈 20 點）觸發黃金抄底警示，並提供出場安全停泊警戒模式。
    - 觸發模式支援「跌破或觸及」以及「接近指定百分比範圍內（例如 ±1%）」。
 
 2. **背景排程與盤中高頻監控**
@@ -46,8 +51,9 @@
    - **傳送分享**：一鍵上傳備份至 **Google 雲端硬碟 (Google Drive)**、Gmail、LINE 等，換機備份無痛搞定。
    - **匯入還原**：支援選取備份檔完整覆蓋還原，內建資料庫事務保護與主鍵安全重配。
 
-7. **應用程式自動更新**
+7. **應用程式自動更新與 CI/CD 自動化**
    - 整合 GitHub Releases API，可於 App 內一鍵檢查並下載安裝最新版本 APK。
+   - 整合 GitHub Actions 自動化 CI/CD：每次推送自動執行單元測試驗證，發布 release tag 自動完成 APK 編譯、簽章與發布。
 
 ---
 
@@ -63,6 +69,7 @@
 - **資料序列化**：Kotlinx Serialization & Moshi
 - **網路通訊**：OkHttp3 + Retrofit2
 - **依賴注入**：純 Kotlin AppContainer 架構（輕量化無反射）
+- **CI/CD**：GitHub Actions（自動化測試與 GitHub Release 簽章發布）
 
 ---
 
@@ -76,17 +83,21 @@
 
 ## English
 
-**Stock Alert & Ledger** is a native Android application built for Taiwan (TW) and US stock investors. It integrates **real-time technical indicator monitoring**, **high-priority notifications**, **one-tap quick buy ledger tracking**, and **complete offline backup & restore**. No accounts or subscriptions needed; all your portfolio data and rules are stored strictly on your local device.
+**Stock Alert & Ledger** is a native Android application built for Taiwan (TW) and US stock investors. It integrates **real-time technical indicator monitoring**, **market sentiment & macro indicators**, **high-priority notifications**, **one-tap quick buy ledger tracking**, and **complete offline backup & restore**. No accounts or subscriptions needed; all your portfolio data and rules are stored strictly on your local device.
 
 ### ✨ Key Features
 
-1. **Dual Market & Multi-Strategy Alerting (v1.4.0+, v1.5.0+)**
+1. **Dual Market & Multi-Strategy Alerting (v1.4.0+, v1.5.0+, v1.6.0+)**
    - Supports Taiwan stocks (`2330.TW`, `0050.TW`) and US equities (`AAPL`, `NVDA`, `TSLA`).
+   - **Macro Market Sentiment Dashboard (v1.6.0+)**:
+     - **US CNN Fear & Greed Index**: Real-time integration tracking sentiment (0-100), classified across Extreme Fear, Fear, Neutral, Greed, and Extreme Greed with contextual descriptions.
+     - **TWSE Overall Margin Maintenance Rate**: Live tracking of Taiwan Stock Exchange credit margin keep rates, triggering buy signals when rebounding from panic levels or alerting safe exits.
+     - **Individual Stock Margin Data & Estimated Maintenance Rate (v1.6.0+)**: Live individual stock margin balance, daily changes, and estimated maintenance health status badges.
+     - **Indicator Guide Dialog**: In-depth explanations for market gauges with actionable investment insights.
    - **Absolute Price Target Alerts (v1.5.0+)**: Precision price target monitoring with "drop below or touch" or "break above or touch" directions, tolerance margins, and auto-disable upon trigger; includes quick percentage offset assist chips based on current price.
    - **Moving Average Monitoring**: short, medium, and long-term MAs (5MA, 10MA, 20MA, 60MA, 120MA, 240MA, plus extended 3-year 720MA, 5-year 1200MA, and 10-year 2400MA; custom cycles up to 3000 days).
    - **Peak Drawdown Bottom-Fishing**: Tracks drawdown percentage (e.g., -10%, -20%) from recent swing highs within customizable lookback days to catch dip-buying opportunities.
    - **RSI Technical Indicator**: Customizable RSI period (default 14 days), alerting on oversold zones (RSI < 30) for bargain hunting or overbought levels (RSI > 70) for profit taking.
-   - **TWSE Market Margin Maintenance Rate**: Directly tracks Taiwan Stock Exchange credit margin keep rates, triggering buy signals when bouncing off panic levels (e.g., <=150% rebounding +20 pts) or alerting safe exits.
    - Alert triggers: "Drop below or touch" and "Within ±X% tolerance".
 
 2. **Background Monitoring & Intraday High-Frequency Alerts**
@@ -112,8 +123,9 @@
    - **Share to Cloud**: Directly upload backups to **Google Drive**, send via Gmail, or share to other devices.
    - **Import / Restore**: One-click restore with atomic database transactions and primary key conflict prevention.
 
-7. **In-App Auto Updater**
+7. **In-App Auto Updater & Automated CI/CD**
    - Seamlessly checks GitHub Releases for new APK versions and facilitates in-app updates.
+   - Automated CI/CD pipeline via GitHub Actions for continuous unit test verification and tagged APK release builds.
 
 ---
 
@@ -129,6 +141,7 @@
 - **Serialization**: Kotlinx Serialization & Moshi
 - **Networking**: OkHttp3 + Retrofit2
 - **DI**: Lightweight manual AppContainer DI
+- **CI/CD**: GitHub Actions (Automated unit tests & signed release publishing)
 
 ---
 
