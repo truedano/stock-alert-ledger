@@ -163,7 +163,7 @@ class StockMonitorViewModel(
         WatchlistCombineState(rules, cachedQuotes, prefs, refreshing, rateWarning)
     }.combine(_marginSnapshotFlow) { state, marginSnap ->
         val (rules, cachedQuotes, prefs, refreshing, rateWarning) = state
-        val quoteMap = cachedQuotes.associate { it.symbol to it.toStockQuote() }
+        val quoteMap = cachedQuotes.associate { it.symbol to marketRepo.attachMarginInfo(it.toStockQuote()) }
         val items = rules.map { rule ->
             val effectiveQuote = if (prefs.dataSourceMode == DataSourceMode.SIMULATED) {
                 val cached = quoteMap[rule.symbol]
@@ -172,6 +172,10 @@ class StockMonitorViewModel(
                     cached != null -> cached.copy(
                         currentPrice = overridePrice ?: cached.currentPrice,
                         isSimulated = true,
+                        marginInfo = cached.marginInfo?.copy(
+                            estimatedKeepRate = com.example.domain.model.MovingAverageCalculator
+                                .calculateEstimatedMarginKeepRate(overridePrice ?: cached.currentPrice, cached.closeHistory)
+                        )
                     )
                     else -> SimulatedMarketProvider.quoteFor(rule.symbol, prefs)
                 }

@@ -73,6 +73,20 @@ object SimulatedMarketProvider {
     fun quoteFor(symbol: String, prefs: AppPreferencesState): StockQuote? {
         val profile = findProfile(symbol) ?: return null
         val price = prefs.simulatedPriceFor(profile.symbol) ?: profile.defaultPrice
+        val marginInfo = if (profile.currency == MarketCurrency.TWD) {
+            val estimatedRate = com.example.domain.model.MovingAverageCalculator
+                .calculateEstimatedMarginKeepRate(price, profile.closeHistory)
+            StockMarginInfo(
+                symbol = profile.symbol,
+                name = profile.name,
+                marginBalance = 29764L,
+                marginChange = -3020L,
+                shortBalance = 59L,
+                shortChange = -52L,
+                estimatedKeepRate = estimatedRate,
+            )
+        } else null
+
         return StockQuote(
             symbol = profile.symbol,
             displaySymbol = profile.displaySymbol,
@@ -83,6 +97,7 @@ object SimulatedMarketProvider {
             closeHistory = profile.closeHistory,
             lastUpdatedAt = System.currentTimeMillis(),
             isSimulated = true,
+            marginInfo = marginInfo,
         )
     }
 }

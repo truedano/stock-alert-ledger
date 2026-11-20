@@ -38,6 +38,7 @@ class MarketDataRepository(
     val cachedQuotesFlow: Flow<List<CachedQuoteEntity>> = cachedQuoteDao.observeAllQuotes()
 
     private var latestMarginSnapshot: com.example.data.remote.MarketMarginSnapshot? = null
+    private var stockMarginCache: Map<String, com.example.data.remote.StockMarginInfo> = emptyMap()
 
     suspend fun fetchTwseMarginSnapshot(): com.example.data.remote.MarketMarginSnapshot? = withContext(Dispatchers.IO) {
         val snapshot = twseMarginService.fetchMarketMarginSnapshot()
@@ -48,6 +49,19 @@ class MarketDataRepository(
     }
 
     fun getLatestMarginSnapshot(): com.example.data.remote.MarketMarginSnapshot? = latestMarginSnapshot
+
+    suspend fun fetchAllStockMargins(): Map<String, com.example.data.remote.StockMarginInfo> = withContext(Dispatchers.IO) {
+        val margins = twseMarginService.fetchAllStockMargins()
+        if (margins.isNotEmpty()) {
+            stockMarginCache = margins
+        }
+        stockMarginCache
+    }
+
+    fun getStockMarginInfo(symbol: String): com.example.data.remote.StockMarginInfo? {
+        val clean = symbol.substringBefore(".").trim().uppercase()
+        return stockMarginCache[clean]
+    }
 
     suspend fun getEnabledSymbols(): List<String> = withContext(Dispatchers.IO) {
         watchlistDao.getEnabledRules().map { it.symbol }.distinct()
@@ -172,6 +186,11 @@ class MarketDataRepository(
                 } catch (_: Exception) {
                     // non-fatal
                 }
+                try {
+                    fetchAllStockMargins()
+                } catch (_: Exception) {
+                    // non-fatal
+                }
             }
 
             // Group rules by symbol so we fetch each ticker once per cycle
@@ -188,23 +207,25 @@ class MarketDataRepository(
 
                 val effectiveQuote = when (quote) {
                     is TickerLookupResult.Success -> {
-                        upsertCachedQuote(quote.quote)
+                        val baseQuote = quote.quote
+                        val attachedQuote = attachMarginInfo(baseQuote)
+                        upsertCachedQuote(attachedQuote)
                         updatedCount++
-                        quote.quote
+                        attachedQuote
                     }
                     is TickerLookupResult.RateLimited -> {
                         issueMessage = quote.message
                         cachedFallbackCount++
-                        cachedQuoteDao.getQuoteBySymbol(symbol)?.toStockQuote()
+                        cachedQuoteDao.getQuoteBySymbol(symbol)?.toStockQuote()?.let { attachMarginInfo(it) }
                     }
                     is TickerLookupResult.Error -> {
                         issueMessage = quote.message
                         cachedFallbackCount++
-                        cachedQuoteDao.getQuoteBySymbol(symbol)?.toStockQuote()
+                        cachedQuoteDao.getQuoteBySymbol(symbol)?.toStockQuote()?.let { attachMarginInfo(it) }
                     }
                     is TickerLookupResult.NotFound -> {
                         cachedFallbackCount++
-                        cachedQuoteDao.getQuoteBySymbol(symbol)?.toStockQuote()
+                        cachedQuoteDao.getQuoteBySymbol(symbol)?.toStockQuote()?.let { attachMarginInfo(it) }
                     }
                 }
 
@@ -365,6 +386,32 @@ class MarketDataRepository(
             return TickerLookupResult.NotFound("模擬模式無 $symbol 歷史報價，請先查詢該股票")
         }
         return yahooFinanceService.fetchExactSymbol(symbol)
+    }
+
+    fun attachMarginInfo(quote: StockQuote): StockQuote {
+        if (quote.marginInfo != null || quote.currency != MarketCurrency.TWD) {
+            return quote
+        }
+        val cleanSymbol = quote.symbol.substringBefore(".").trim().uppercase()
+        val twseMargin = stockMarginCache[cleanSymbol]
+        val estimatedRate = com.example.domain.model.MovingAverageCalculator
+            .calculateEstimatedMarginKeepRate(quote.currentPrice, quote.closeHistory)
+
+        val mergedMargin = if (twseMargin != null) {
+            twseMargin.copy(estimatedKeepRate = estimatedRate)
+        } else if (estimatedRate != null) {
+            com.example.data.remote.StockMarginInfo(
+                symbol = quote.symbol,
+                name = quote.name,
+                marginBalance = 0L,
+                marginChange = 0L,
+                shortBalance = 0L,
+                shortChange = 0L,
+                estimatedKeepRate = estimatedRate,
+            )
+        } else null
+
+        return quote.copy(marginInfo = mergedMargin)
     }
 
     private suspend fun upsertCachedQuote(quote: StockQuote) {

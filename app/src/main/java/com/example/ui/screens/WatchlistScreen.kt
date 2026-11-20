@@ -53,6 +53,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.local.WatchlistRuleEntity
 import com.example.domain.model.Formatters
+import com.example.domain.model.MarketCurrency
 import com.example.ui.WatchlistItemUi
 import com.example.ui.WatchlistUiState
 import com.example.ui.components.MarketBadge
@@ -61,6 +62,7 @@ import com.example.ui.components.WatchlistStatusHeader
 import com.example.ui.theme.AlertAmber
 import com.example.ui.theme.AlertAmberContainer
 import com.example.ui.theme.BrandSky
+import com.example.ui.theme.BrandSkyContainer
 import com.example.ui.theme.CanvasObsidian
 import com.example.ui.theme.FinancialTextStyles
 import com.example.ui.theme.HairlineBorder
@@ -473,6 +475,102 @@ private fun WatchlistRuleCard(
                             )
                         }
                     }
+            }
+
+            // 個股融資資訊與推估維持率區塊 (方案 A + 方案 B)
+            val marginInfo = quote?.marginInfo
+            if (rule.currency == MarketCurrency.TWD && marginInfo != null) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = SurfaceCardHigh.copy(alpha = 0.5f),
+                    border = BorderStroke(1.dp, HairlineBorder.copy(alpha = 0.6f)),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        // 方案 A：融資餘額與日增減
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = BrandSkyContainer,
+                            ) {
+                                Text(
+                                    text = "資",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = BrandSky,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                )
+                            }
+                            val marginBalStr = if (marginInfo.marginBalance > 0L) {
+                                "${Formatters.formatShares(marginInfo.marginBalance.toDouble())} 張"
+                            } else {
+                                "--"
+                            }
+                            val changeSign = if (marginInfo.marginChange > 0) "+" else ""
+                            val changeColor = when {
+                                marginInfo.marginChange > 0 -> TaiwanRed
+                                marginInfo.marginChange < 0 -> TaiwanGreen
+                                else -> TextSecondary
+                            }
+                            Text(
+                                text = marginBalStr,
+                                style = FinancialTextStyles.numericSmall,
+                                color = TextPrimary,
+                            )
+                            if (marginInfo.marginBalance > 0L && marginInfo.marginChange != 0L) {
+                                Text(
+                                    text = "($changeSign${marginInfo.marginChange})",
+                                    style = FinancialTextStyles.numericSmall,
+                                    color = changeColor,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                            }
+                        }
+
+                        // 方案 B：推估個股融資維持率
+                        val estRate = marginInfo.estimatedKeepRate
+                        if (estRate != null) {
+                            val rateColor = when {
+                                estRate < 135.0 -> TaiwanRed
+                                estRate < 150.0 -> AlertAmber
+                                else -> TaiwanGreen
+                            }
+                            val rateBg = when {
+                                estRate < 135.0 -> TaiwanRedContainer
+                                estRate < 150.0 -> AlertAmberContainer
+                                else -> TaiwanGreenContainer
+                            }
+                            val tagText = when {
+                                estRate < 130.0 -> "面臨追繳"
+                                estRate < 140.0 -> "高度警戒"
+                                estRate < 150.0 -> "調整警戒"
+                                else -> "安全"
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = rateBg,
+                                border = BorderStroke(1.dp, rateColor.copy(alpha = 0.35f)),
+                            ) {
+                                Text(
+                                    text = "推估維持率 ${String.format(java.util.Locale.US, "%.1f", estRate)}% · $tagText",
+                                    style = FinancialTextStyles.numericSmall,
+                                    color = rateColor,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
             // Condition & Planned Budget Strip

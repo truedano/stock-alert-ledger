@@ -107,6 +107,22 @@ object MovingAverageCalculator {
         val rsi = 100.0 - (100.0 / (1.0 + rs))
         return if (rsi.isNaN() || rsi.isInfinite()) null else rsi
     }
+
+    /**
+     * 計算個股推估融資維持率（%）：
+     * 業界標準模型以近 20 日收盤均價作為融資平均進場成本估算基底，
+     * 依台灣證交所融資上市股票自備款四成、融資借款六成（成本 x 0.6）：
+     * 推估維持率 = (當前市價 / (推估融資成本 * 0.6)) * 100%
+     */
+    fun calculateEstimatedMarginKeepRate(currentPrice: Double, closes: List<Double>): Double? {
+        if (currentPrice <= 0.0) return null
+        val baselineCost = calculateSma(closes, 20) ?: closes.lastOrNull() ?: currentPrice
+        if (baselineCost <= 0.0) return null
+        val loanAmount = baselineCost * 0.6
+        if (loanAmount <= 0.0) return null
+        val rate = (currentPrice / loanAmount) * 100.0
+        return if (rate.isNaN() || rate.isInfinite() || rate <= 0.0) null else rate
+    }
 }
 
 class MovingAverageEvaluator : ConditionEvaluator<MovingAverageCondition> {
