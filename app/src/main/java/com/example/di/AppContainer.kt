@@ -20,6 +20,9 @@ class AppContainer(context: Context) {
     val twseMarginService: com.example.data.remote.TwseMarginService by lazy {
         com.example.data.remote.TwseMarginService()
     }
+    val fearAndGreedService: com.example.data.remote.FearAndGreedService by lazy {
+        com.example.data.remote.FearAndGreedService()
+    }
     val updateManager: AppUpdateManager by lazy { AppUpdateManager(appContext) }
     val backupRepository: BackupRepository by lazy {
         BackupRepository(
@@ -34,6 +37,7 @@ class AppContainer(context: Context) {
             appContext = appContext,
             yahooFinanceService = yahooFinanceService,
             twseMarginService = twseMarginService,
+            fearAndGreedService = fearAndGreedService,
             watchlistDao = database.watchlistDao(),
             cachedQuoteDao = database.cachedQuoteDao(),
             preferencesRepository = preferencesRepository,

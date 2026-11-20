@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,10 +47,12 @@ import com.example.ui.theme.FinancialTextStyles
 import com.example.ui.theme.HairlineBorder
 import com.example.ui.theme.SurfaceCard
 import com.example.ui.theme.SurfaceCardHigh
+import com.example.ui.theme.SurfaceElevated
 import com.example.ui.theme.TaiwanGreen
 import com.example.ui.theme.TaiwanGreenContainer
 import com.example.ui.theme.TaiwanRed
 import com.example.ui.theme.TaiwanRedContainer
+import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 
@@ -185,6 +188,7 @@ fun WatchlistStatusHeader(
     marketKeepRate: Double? = null,
     marketCallAccNum: Long? = null,
     marketExeAccNum: Long? = null,
+    fearAndGreed: com.example.domain.model.FearAndGreedData? = null,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -248,72 +252,17 @@ fun WatchlistStatusHeader(
                     color = TextSecondary,
                 )
 
-                if (marketKeepRate != null && marketKeepRate > 0.0) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    val isPanic = marketKeepRate < 150.0
-                    val isWarm = marketKeepRate >= 170.0
-                    val badgeColor = when {
-                        isPanic -> TaiwanRed
-                        isWarm -> TaiwanGreen
-                        else -> AlertAmber
-                    }
-                    val badgeBg = when {
-                        isPanic -> TaiwanRedContainer
-                        isWarm -> TaiwanGreenContainer
-                        else -> AlertAmberContainer
-                    }
-                    val statusText = when {
-                        isPanic -> "🚨 極端恐慌斷頭區 (<150%)"
-                        isWarm -> "🟢 籌碼安全水位 (≥170%)"
-                        else -> "⚠️ 融資警戒調整區 (150%~170%)"
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = badgeBg.copy(alpha = 0.7f),
-                        border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.4f)),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "全市場融資維持率：${String.format(java.util.Locale.US, "%.1f", marketKeepRate)}%",
-                                    style = FinancialTextStyles.numericMedium,
-                                    color = badgeColor,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = statusText,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = TextSecondary,
-                                )
-                            }
-                            if (marketCallAccNum != null && marketExeAccNum != null) {
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text(
-                                        text = "追繳 $marketCallAccNum 戶",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = TextSecondary,
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = "處分 $marketExeAccNum 戶",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (marketExeAccNum > 100) TaiwanRed else TextSecondary,
-                                        fontWeight = if (marketExeAccNum > 100) FontWeight.Bold else FontWeight.Normal,
-                                    )
-                                }
-                            }
-                        }
-                    }
+                // 宏觀市場概況：台美雙指標（美股恐懼與貪婪 + 台股融資維持率）
+                val hasMargin = marketKeepRate != null && marketKeepRate > 0.0
+                val hasFng = fearAndGreed != null
+                if (hasFng || hasMargin) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    MarketMacroSentimentPanel(
+                        fearAndGreed = fearAndGreed,
+                        marketKeepRate = marketKeepRate,
+                        marketCallAccNum = marketCallAccNum,
+                        marketExeAccNum = marketExeAccNum,
+                    )
                 }
 
                 if (hasRateLimitWarning) {
@@ -353,6 +302,305 @@ fun WatchlistStatusHeader(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun MarketMacroSentimentPanel(
+    fearAndGreed: com.example.domain.model.FearAndGreedData?,
+    marketKeepRate: Double?,
+    marketCallAccNum: Long?,
+    marketExeAccNum: Long?,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = SurfaceElevated.copy(alpha = 0.95f),
+        border = BorderStroke(1.dp, HairlineBorder),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            // 標題列
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "🌐 市場宏觀溫度計",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = BrandSky,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+                Text(
+                    text = "台股籌碼 · 美股情緒",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextMuted,
+                )
+            }
+
+            // 雙欄排版：左欄美股恐懼指數，右欄台股融資維持率
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                // 美股 CNN 恐懼與貪婪指數
+                Box(modifier = Modifier.weight(1f)) {
+                    if (fearAndGreed != null) {
+                        FearAndGreedMiniCard(data = fearAndGreed)
+                    } else {
+                        EmptySentimentPlaceholder(title = "美股恐懼與貪婪", subtitle = "暫無數據")
+                    }
+                }
+
+                // 台股全市場融資維持率
+                Box(modifier = Modifier.weight(1f)) {
+                    if (marketKeepRate != null && marketKeepRate > 0.0) {
+                        TaiwanMarginMiniCard(
+                            keepRate = marketKeepRate,
+                            callAccNum = marketCallAccNum,
+                            exeAccNum = marketExeAccNum,
+                        )
+                    } else {
+                        EmptySentimentPlaceholder(title = "台股融資維持率", subtitle = "台股休市或載入中")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FearAndGreedMiniCard(
+    data: com.example.domain.model.FearAndGreedData,
+    modifier: Modifier = Modifier,
+) {
+    val classification = data.ratingClassification
+    val primaryColor = classification.primaryColor
+    val containerColor = classification.containerColor
+
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = containerColor.copy(alpha = 0.65f),
+        border = BorderStroke(1.dp, primaryColor.copy(alpha = 0.4f)),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "美股恐懼貪婪",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary,
+                )
+                Text(
+                    text = "${data.roundedScore}",
+                    style = FinancialTextStyles.numericMedium,
+                    color = primaryColor,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // 評級狀態
+            Text(
+                text = "${classification.displayNameZh} (${classification.displayNameEn})",
+                style = MaterialTheme.typography.labelSmall,
+                color = primaryColor,
+                fontWeight = FontWeight.SemiBold,
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // 迷你刻度進度條 (0 ~ 100)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .background(Color(0xFF27354F), shape = RoundedCornerShape(2.dp))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(fraction = (data.roundedScore / 100f).coerceIn(0.05f, 1f))
+                        .height(4.dp)
+                        .background(primaryColor, shape = RoundedCornerShape(2.dp))
+                )
+            }
+
+            if (data.previousClose != null || data.previousOneWeek != null) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    data.previousClose?.let { prev ->
+                        Text(
+                            text = "昨收 ${prev.toInt()}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextMuted,
+                        )
+                    }
+                    data.previousOneWeek?.let { week ->
+                        Text(
+                            text = "上週 ${week.toInt()}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextMuted,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TaiwanMarginMiniCard(
+    keepRate: Double,
+    callAccNum: Long?,
+    exeAccNum: Long?,
+    modifier: Modifier = Modifier,
+) {
+    val isPanic = keepRate < 150.0
+    val isWarm = keepRate >= 170.0
+    val badgeColor = when {
+        isPanic -> TaiwanRed
+        isWarm -> TaiwanGreen
+        else -> AlertAmber
+    }
+    val badgeBg = when {
+        isPanic -> TaiwanRedContainer
+        isWarm -> TaiwanGreenContainer
+        else -> AlertAmberContainer
+    }
+    val statusText = when {
+        isPanic -> "斷頭恐慌 (<150%)"
+        isWarm -> "籌碼安全 (≥170%)"
+        else -> "警戒整理 (150-170%)"
+    }
+
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = badgeBg.copy(alpha = 0.65f),
+        border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.4f)),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "台股融資維持率",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary,
+                )
+                Text(
+                    text = "${String.format(java.util.Locale.US, "%.1f", keepRate)}%",
+                    style = FinancialTextStyles.numericMedium,
+                    color = badgeColor,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = statusText,
+                style = MaterialTheme.typography.labelSmall,
+                color = badgeColor,
+                fontWeight = FontWeight.SemiBold,
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // 維持率安全刻度指示條 (基準 130% ~ 180%)
+            val progressFraction = ((keepRate - 130.0) / (180.0 - 130.0)).toFloat().coerceIn(0.05f, 1f)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .background(Color(0xFF27354F), shape = RoundedCornerShape(2.dp))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(fraction = progressFraction)
+                        .height(4.dp)
+                        .background(badgeColor, shape = RoundedCornerShape(2.dp))
+                )
+            }
+
+            if (callAccNum != null && exeAccNum != null) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = "追繳 $callAccNum 戶",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextMuted,
+                    )
+                    Text(
+                        text = "處分 $exeAccNum 戶",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (exeAccNum > 100) TaiwanRed else TextMuted,
+                        fontWeight = if (exeAccNum > 100) FontWeight.Bold else FontWeight.Normal,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptySentimentPlaceholder(
+    title: String,
+    subtitle: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = SurfaceCardHigh.copy(alpha = 0.5f),
+        border = BorderStroke(1.dp, HairlineBorder),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 12.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelSmall,
+                color = TextSecondary,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.labelSmall,
+                color = TextMuted,
+            )
         }
     }
 }
