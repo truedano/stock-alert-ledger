@@ -407,9 +407,18 @@ private fun WatchlistRuleCard(
                         color = TextSecondary,
                     )
                     Text(
-                        text = eval?.targetReferencePrice?.let {
-                            Formatters.formatPrice(it, rule.currency)
-                        } ?: "--",
+                        text = when {
+                            rule.condition is com.example.domain.model.RsiCondition -> {
+                                eval?.targetReferencePrice?.let {
+                                    String.format(java.util.Locale.US, "%.1f", it)
+                                } ?: "--"
+                            }
+                            else -> {
+                                eval?.targetReferencePrice?.let {
+                                    Formatters.formatPrice(it, rule.currency)
+                                } ?: "--"
+                            }
+                        },
                         style = FinancialTextStyles.numericMedium,
                         color = BrandSky,
                     )
@@ -423,8 +432,14 @@ private fun WatchlistRuleCard(
                             shape = RoundedCornerShape(6.dp),
                             color = pillBg,
                         ) {
+                            val distLabel = if (rule.condition is com.example.domain.model.RsiCondition) {
+                                val sign = if (dist > 0) "+" else ""
+                                "差額 $sign${String.format(java.util.Locale.US, "%.1f", dist)}"
+                            } else {
+                                "距目標 ${Formatters.formatSignedPercent(dist)}"
+                            }
                             Text(
-                                text = "距目標 ${Formatters.formatSignedPercent(dist)}",
+                                text = distLabel,
                                 style = FinancialTextStyles.numericSmall,
                                 color = pillColor,
                                 fontWeight = FontWeight.SemiBold,
