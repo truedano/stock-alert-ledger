@@ -277,17 +277,18 @@ fun WatchlistStatusHeader(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 10.dp, vertical = 7.dp),
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = "全市場融資維持率：${String.format(java.util.Locale.US, "%.1f", marketKeepRate)}%",
                                     style = FinancialTextStyles.numericMedium,
                                     color = badgeColor,
                                     fontWeight = FontWeight.Bold,
                                 )
+                                Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = statusText,
                                     style = MaterialTheme.typography.labelSmall,
@@ -295,12 +296,14 @@ fun WatchlistStatusHeader(
                                 )
                             }
                             if (marketCallAccNum != null && marketExeAccNum != null) {
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Column(horizontalAlignment = Alignment.End) {
                                     Text(
                                         text = "追繳 $marketCallAccNum 戶",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = TextSecondary,
                                     )
+                                    Spacer(modifier = Modifier.height(2.dp))
                                     Text(
                                         text = "處分 $marketExeAccNum 戶",
                                         style = MaterialTheme.typography.labelSmall,
