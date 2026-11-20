@@ -14,8 +14,9 @@
 
 ### ✨ 核心功能
 
-1. **台美雙市場報價與全方位策略條件監控（v1.4.0+）**
+1. **台美雙市場報價與全方位策略條件監控（v1.4.0+, v1.5.0+）**
    - 支援台股代號（如 `2330.TW`、`0050.TW`）與美股代號（如 `AAPL`、`NVDA`）。
+   - **絕對目標價警示（v1.5.0+）**：支援設定精準目標價買進或停利提醒，具備「跌破/觸及」或「突破/觸及」方向判定、容許偏差範圍，以及觸發後自動停用規則機制；提供現價快捷百分比換算晶片輔助輸入。
    - **多元均線監控**：短中長期均線（週線 5MA、雙週線 10MA、月線 20MA、季線 60MA、半年線 120MA、年線 240MA，以及長週期 3年線 720MA、5年線 1200MA、10年線 2400MA，支援最高 3000 天自訂週期）。
    - **波段高點回撤抄底（Peak Drawdown）**：支援自訂回溯天數（如 60 日、120 日）與自波段最高價下跌百分比（如回撤 -10%、-20%），精準捕捉右側抄底或逢低佈局買點。
    - **RSI 技術指標警示**：計算自訂週期 RSI（預設 14 日），支援「跌破超賣區 (RSI < 30)」恐慌撿便宜或「突破超買區 (RSI > 70)」獲利調節提醒。
@@ -79,8 +80,9 @@
 
 ### ✨ Key Features
 
-1. **Dual Market & Multi-Strategy Alerting (v1.4.0+)**
+1. **Dual Market & Multi-Strategy Alerting (v1.4.0+, v1.5.0+)**
    - Supports Taiwan stocks (`2330.TW`, `0050.TW`) and US equities (`AAPL`, `NVDA`, `TSLA`).
+   - **Absolute Price Target Alerts (v1.5.0+)**: Precision price target monitoring with "drop below or touch" or "break above or touch" directions, tolerance margins, and auto-disable upon trigger; includes quick percentage offset assist chips based on current price.
    - **Moving Average Monitoring**: short, medium, and long-term MAs (5MA, 10MA, 20MA, 60MA, 120MA, 240MA, plus extended 3-year 720MA, 5-year 1200MA, and 10-year 2400MA; custom cycles up to 3000 days).
    - **Peak Drawdown Bottom-Fishing**: Tracks drawdown percentage (e.g., -10%, -20%) from recent swing highs within customizable lookback days to catch dip-buying opportunities.
    - **RSI Technical Indicator**: Customizable RSI period (default 14 days), alerting on oversold zones (RSI < 30) for bargain hunting or overbought levels (RSI > 70) for profit taking.
