@@ -86,6 +86,7 @@ data class WatchlistUiState(
     val marketKeepRate: Double? = null,
     val marketCallAccNum: Long? = null,
     val marketExeAccNum: Long? = null,
+    val fearAndGreed: com.example.domain.model.FearAndGreedData? = null,
 )
 
 data class PortfolioUiState(
@@ -134,10 +135,16 @@ class StockMonitorViewModel(
         )
 
     private val _marginSnapshotFlow = MutableStateFlow<com.example.data.remote.MarketMarginSnapshot?>(null)
+    private val _fearAndGreedFlow = MutableStateFlow<com.example.domain.model.FearAndGreedData?>(null)
 
     init {
-        // 僅在使用者有啟用「融資維持率條件」或啟用「台股」監控時，才在背景向證交所 API 抓取
+        // 進入 App 時背景非同步抓取全市場維持率與恐懼貪婪指數
         viewModelScope.launch {
+            try {
+                val fng = marketRepo.fetchFearAndGreed(forceRefresh = false)
+                _fearAndGreedFlow.value = fng
+            } catch (_: Exception) {
+            }
             try {
                 val rules = marketRepo.getEnabledRulesSnapshot()
                 val needsMargin = rules.any {
@@ -162,6 +169,8 @@ class StockMonitorViewModel(
     ) { rules, cachedQuotes, prefs, refreshing, rateWarning ->
         WatchlistCombineState(rules, cachedQuotes, prefs, refreshing, rateWarning)
     }.combine(_marginSnapshotFlow) { state, marginSnap ->
+        state to marginSnap
+    }.combine(_fearAndGreedFlow) { (state, marginSnap), fngData ->
         val (rules, cachedQuotes, prefs, refreshing, rateWarning) = state
         val quoteMap = cachedQuotes.associate { it.symbol to marketRepo.attachMarginInfo(it.toStockQuote()) }
         val items = rules.map { rule ->
@@ -281,6 +290,7 @@ class StockMonitorViewModel(
             marketKeepRate = marginSnap?.keepRate,
             marketCallAccNum = marginSnap?.callAccNum,
             marketExeAccNum = marginSnap?.exeAccNum,
+            fearAndGreed = fngData,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -330,6 +340,14 @@ class StockMonitorViewModel(
         viewModelScope.launch {
             _isRefreshing.value = true
             try {
+                // 手動整理時同時更新恐懼與貪婪指數
+                try {
+                    val fng = marketRepo.fetchFearAndGreed(forceRefresh = true)
+                    if (fng != null) {
+                        _fearAndGreedFlow.value = fng
+                    }
+                } catch (_: Exception) {
+                }
                 // 僅在有設定維持率條件或台股標的時同步更新
                 val rules = marketRepo.getEnabledRulesSnapshot()
                 val needsMargin = rules.any {

@@ -30,6 +30,7 @@ class MarketDataRepository(
     private val appContext: Context,
     private val yahooFinanceService: YahooFinanceService,
     private val twseMarginService: com.example.data.remote.TwseMarginService = com.example.data.remote.TwseMarginService(),
+    private val fearAndGreedService: com.example.data.remote.FearAndGreedService = com.example.data.remote.FearAndGreedService(),
     private val watchlistDao: WatchlistDao,
     private val cachedQuoteDao: CachedQuoteDao,
     private val preferencesRepository: AppPreferencesRepository,
@@ -39,6 +40,17 @@ class MarketDataRepository(
 
     private var latestMarginSnapshot: com.example.data.remote.MarketMarginSnapshot? = null
     private var stockMarginCache: Map<String, com.example.data.remote.StockMarginInfo> = emptyMap()
+    private var latestFearAndGreed: com.example.domain.model.FearAndGreedData? = null
+
+    suspend fun fetchFearAndGreed(forceRefresh: Boolean = false): com.example.domain.model.FearAndGreedData? = withContext(Dispatchers.IO) {
+        val data = fearAndGreedService.fetchFearAndGreed(forceRefresh)
+        if (data != null) {
+            latestFearAndGreed = data
+        }
+        latestFearAndGreed
+    }
+
+    fun getLatestFearAndGreed(): com.example.domain.model.FearAndGreedData? = latestFearAndGreed
 
     suspend fun fetchTwseMarginSnapshot(): com.example.data.remote.MarketMarginSnapshot? = withContext(Dispatchers.IO) {
         val snapshot = twseMarginService.fetchMarketMarginSnapshot()
@@ -188,6 +200,15 @@ class MarketDataRepository(
                 }
                 try {
                     fetchAllStockMargins()
+                } catch (_: Exception) {
+                    // non-fatal
+                }
+            }
+
+            // 更新美股恐懼與貪婪指數（在真實數據模式下執行，內部有 1 小時快取保護）
+            if (prefs.dataSourceMode == DataSourceMode.REAL) {
+                try {
+                    fetchFearAndGreed(forceRefresh = false)
                 } catch (_: Exception) {
                     // non-fatal
                 }

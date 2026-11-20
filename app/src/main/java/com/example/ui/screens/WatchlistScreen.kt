@@ -180,6 +180,7 @@ fun WatchlistScreen(
                             marketKeepRate = uiState.marketKeepRate,
                             marketCallAccNum = uiState.marketCallAccNum,
                             marketExeAccNum = uiState.marketExeAccNum,
+                            fearAndGreed = uiState.fearAndGreed,
                         )
                     }
 
