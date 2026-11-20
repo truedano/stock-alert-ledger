@@ -399,6 +399,9 @@ class MarketDataRepository(
         }
 
         watchlistDao.markTriggered(rule.id, todayKey, now)
+        if (rule.condition is com.example.domain.model.PriceTargetCondition && rule.condition.autoDisableOnTrigger) {
+            watchlistDao.setEnabled(rule.id, false)
+        }
         if (sendNotification) {
             StockNotificationHelper.showBuyAlertNotification(
                 context = appContext,

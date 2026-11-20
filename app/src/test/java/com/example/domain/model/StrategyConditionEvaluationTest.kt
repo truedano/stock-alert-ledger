@@ -109,4 +109,71 @@ class StrategyConditionEvaluationTest {
         assertFalse(rsiResult.isTriggered)
         assertTrue(rsiResult.isInsufficientData)
     }
+
+    @Test
+    fun `test PriceTargetCondition below or equal`() {
+        val targetCond = PriceTargetCondition(
+            targetPrice = 1000.0,
+            direction = PriceTargetDirection.BELOW_OR_EQUAL,
+            tolerancePercent = 0.0,
+            autoDisableOnTrigger = true,
+        )
+
+        val snapshotAbove = MarketSnapshot(
+            symbol = "2330.TW",
+            currentPrice = 1050.0,
+            historicalCloses = listOf(1050.0),
+        )
+        val evalAbove = ConditionEngine.evaluate(targetCond, snapshotAbove)
+        assertFalse(evalAbove.isTriggered)
+        assertTrue(evalAbove.statusMessage.contains("高於目標價"))
+
+        val snapshotBelow = MarketSnapshot(
+            symbol = "2330.TW",
+            currentPrice = 995.0,
+            historicalCloses = listOf(995.0),
+        )
+        val evalBelow = ConditionEngine.evaluate(targetCond, snapshotBelow)
+        assertTrue(evalBelow.isTriggered)
+        assertTrue(evalBelow.statusMessage.contains("已跌破或觸及目標價"))
+    }
+
+    @Test
+    fun `test PriceTargetCondition above or equal and tolerance`() {
+        val targetCond = PriceTargetCondition(
+            targetPrice = 200.0,
+            direction = PriceTargetDirection.ABOVE_OR_EQUAL,
+            tolerancePercent = 1.0, // ±1% = 198.0 ~ 202.0
+            autoDisableOnTrigger = true,
+        )
+
+        // 195.0 -> 未進入 ±1%
+        val snapshotFar = MarketSnapshot(
+            symbol = "AAPL",
+            currentPrice = 195.0,
+            historicalCloses = listOf(195.0),
+        )
+        val evalFar = ConditionEngine.evaluate(targetCond, snapshotFar)
+        assertFalse(evalFar.isTriggered)
+
+        // 198.5 -> 在 -0.75% 內，接近目標價觸發預警
+        val snapshotNear = MarketSnapshot(
+            symbol = "AAPL",
+            currentPrice = 198.5,
+            historicalCloses = listOf(198.5),
+        )
+        val evalNear = ConditionEngine.evaluate(targetCond, snapshotNear)
+        assertTrue(evalNear.isTriggered)
+        assertTrue(evalNear.statusMessage.contains("已接近目標價"))
+
+        // 205.0 -> 突破目標價觸發
+        val snapshotBreak = MarketSnapshot(
+            symbol = "AAPL",
+            currentPrice = 205.0,
+            historicalCloses = listOf(205.0),
+        )
+        val evalBreak = ConditionEngine.evaluate(targetCond, snapshotBreak)
+        assertTrue(evalBreak.isTriggered)
+        assertTrue(evalBreak.statusMessage.contains("已突破或觸及目標價"))
+    }
 }
