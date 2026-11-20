@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -30,6 +31,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -75,10 +78,11 @@ import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 
 enum class RuleConditionCategory(val title: String) {
+    PRICE_TARGET("目標價"),
     MOVING_AVERAGE("均線 (SMA)"),
-    PEAK_DRAWDOWN("波段回撤抄底"),
+    PEAK_DRAWDOWN("波段回撤"),
     RSI("RSI 指標"),
-    MARGIN("融資維持率斷頭"),
+    MARGIN("融資維持率"),
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -101,12 +105,30 @@ fun AddEditRuleDialog(
 ) {
     val initialCond = editingRule?.condition
     val initialCategory = when (initialCond) {
+        is com.example.domain.model.PriceTargetCondition -> RuleConditionCategory.PRICE_TARGET
         is PeakDrawdownCondition -> RuleConditionCategory.PEAK_DRAWDOWN
         is RsiCondition -> RuleConditionCategory.RSI
         is com.example.domain.model.MarginMaintenanceCondition -> RuleConditionCategory.MARGIN
         else -> RuleConditionCategory.MOVING_AVERAGE
     }
     var selectedCategory by remember(editingRule) { mutableStateOf(initialCategory) }
+
+    // 目標價狀態
+    val initialPriceTarget = initialCond as? com.example.domain.model.PriceTargetCondition
+    var targetPriceText by remember(editingRule) {
+        mutableStateOf(initialPriceTarget?.targetPrice?.let {
+            if (it % 1.0 == 0.0) it.toLong().toString() else it.toString()
+        } ?: "")
+    }
+    var targetDirection by remember(editingRule) {
+        mutableStateOf(initialPriceTarget?.direction ?: com.example.domain.model.PriceTargetDirection.BELOW_OR_EQUAL)
+    }
+    var targetToleranceText by remember(editingRule) {
+        mutableStateOf((initialPriceTarget?.tolerancePercent ?: 0.0).toString())
+    }
+    var autoDisableOnTrigger by remember(editingRule) {
+        mutableStateOf(initialPriceTarget?.autoDisableOnTrigger ?: true)
+    }
 
     // MA 狀態
     val initialMa = initialCond as? MovingAverageCondition
@@ -189,6 +211,8 @@ fun AddEditRuleDialog(
     } else {
         selectedPeriod
     }
+    val effectiveTargetPrice = targetPriceText.toDoubleOrNull() ?: 0.0
+    val targetTolerance = targetToleranceText.toDoubleOrNull() ?: 0.0
     val plannedAmount = plannedAmountText.toDoubleOrNull() ?: 0.0
     val tolerance = toleranceText.toDoubleOrNull() ?: 1.0
     val effectiveLookback = drawdownLookbackDaysText.toIntOrNull() ?: 250
@@ -200,6 +224,9 @@ fun AddEditRuleDialog(
     val effectiveExit = marginExitThresholdText.toDoubleOrNull() ?: 170.0
 
     val isConditionValid = when (selectedCategory) {
+        RuleConditionCategory.PRICE_TARGET -> {
+            effectiveTargetPrice > 0.0 && targetTolerance >= 0.0
+        }
         RuleConditionCategory.MOVING_AVERAGE -> {
             effectivePeriod in 1..3000 &&
                 (triggerMode == MovingAverageTriggerMode.BELOW_OR_EQUAL || tolerance >= 0.0)
@@ -381,16 +408,16 @@ fun AddEditRuleDialog(
                     style = MaterialTheme.typography.labelLarge,
                     color = BrandSky,
                 )
-                Row(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     RuleConditionCategory.entries.forEach { category ->
                         FilterChip(
                             selected = selectedCategory == category,
                             onClick = { selectedCategory = category },
                             label = { Text(category.title) },
-                            modifier = Modifier.weight(1f),
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = BrandSkyContainer,
                                 selectedLabelColor = BrandSky,
@@ -400,6 +427,107 @@ fun AddEditRuleDialog(
                 }
 
                 when (selectedCategory) {
+                    RuleConditionCategory.PRICE_TARGET -> {
+                        Text(
+                            text = "觸發方向",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = TextPrimary,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            FilterChip(
+                                selected = targetDirection == com.example.domain.model.PriceTargetDirection.BELOW_OR_EQUAL,
+                                onClick = { targetDirection = com.example.domain.model.PriceTargetDirection.BELOW_OR_EQUAL },
+                                label = { Text("跌破或觸及 (≤)") },
+                                modifier = Modifier.weight(1f),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = BrandSkyContainer,
+                                    selectedLabelColor = BrandSky,
+                                ),
+                            )
+                            FilterChip(
+                                selected = targetDirection == com.example.domain.model.PriceTargetDirection.ABOVE_OR_EQUAL,
+                                onClick = { targetDirection = com.example.domain.model.PriceTargetDirection.ABOVE_OR_EQUAL },
+                                label = { Text("突破或觸及 (≥)") },
+                                modifier = Modifier.weight(1f),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = BrandSkyContainer,
+                                    selectedLabelColor = BrandSky,
+                                ),
+                            )
+                        }
+
+                        OutlinedTextField(
+                            value = targetPriceText,
+                            onValueChange = { targetPriceText = it },
+                            label = { Text("目標價 (${activeCurrency.prefix})") },
+                            prefix = { Text("${activeCurrency.prefix} ") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+
+                        // 快捷填入目標價輔助按鈕
+                        if (activePrice != null && activePrice > 0.0) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = "現價快速換算:",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary,
+                                )
+                                val presets = listOf(-5 to "-5%", -10 to "-10%", 5 to "+5%", 10 to "+10%")
+                                for ((pct, label) in presets) {
+                                    val calcPrice = activePrice * (1.0 + pct / 100.0)
+                                    val formatted = if (calcPrice >= 100) String.format(java.util.Locale.US, "%.1f", calcPrice)
+                                    else String.format(java.util.Locale.US, "%.2f", calcPrice)
+                                    AssistChip(
+                                        onClick = { targetPriceText = formatted },
+                                        label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                                    )
+                                }
+                            }
+                        }
+
+                        OutlinedTextField(
+                            value = targetToleranceText,
+                            onValueChange = { targetToleranceText = it },
+                            label = { Text("接近提醒容許百分比 (±% 內提前提醒，0 表示不提前)") },
+                            suffix = { Text("%") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "觸發一次後自動停用/完成",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = TextPrimary,
+                                )
+                                Text(
+                                    text = "目標價通常為特定買點或停利點，發送提醒後自動關閉避免重複打擾",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary,
+                                )
+                            }
+                            Switch(
+                                checked = autoDisableOnTrigger,
+                                onCheckedChange = { autoDisableOnTrigger = it },
+                            )
+                        }
+                    }
+
                     RuleConditionCategory.MOVING_AVERAGE -> {
                         // MA Period Selection
                         Text(
@@ -733,6 +861,12 @@ fun AddEditRuleDialog(
                             val displaySym = verifiedQuote?.displaySymbol ?: editingRule?.displaySymbol ?: symbol
                             val name = verifiedQuote?.name ?: editingRule?.name ?: displaySym
                             val condition: AlertCondition = when (selectedCategory) {
+                                RuleConditionCategory.PRICE_TARGET -> com.example.domain.model.PriceTargetCondition(
+                                    targetPrice = effectiveTargetPrice,
+                                    direction = targetDirection,
+                                    tolerancePercent = targetTolerance.coerceAtLeast(0.0),
+                                    autoDisableOnTrigger = autoDisableOnTrigger,
+                                )
                                 RuleConditionCategory.MOVING_AVERAGE -> MovingAverageCondition(
                                     periodDays = effectivePeriod,
                                     triggerMode = triggerMode,

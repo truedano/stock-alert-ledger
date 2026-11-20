@@ -113,3 +113,46 @@ data class MarginMaintenanceCondition(
     val shortTriggerTag: String
         get() = if (isExitMode) "維持率回升>${exitThreshold.toInt()}%" else "維持率<${panicThreshold.toInt()}%反彈+${reboundPoints.toInt()}"
 }
+
+@Serializable
+enum class PriceTargetDirection {
+    @SerialName("below_or_equal")
+    BELOW_OR_EQUAL,
+
+    @SerialName("above_or_equal")
+    ABOVE_OR_EQUAL,
+}
+
+/**
+ * 絕對目標價提醒條件：
+ * 例如 targetPrice = 1000.0, direction = BELOW_OR_EQUAL 表示現價跌破或觸及 1000 元時提醒。
+ * autoDisableOnTrigger = true (預設)：觸發一次發出通知後自動停用/完成該規則，避免後續重複騷擾。
+ */
+@Serializable
+@SerialName("price_target")
+data class PriceTargetCondition(
+    val targetPrice: Double,
+    val direction: PriceTargetDirection = PriceTargetDirection.BELOW_OR_EQUAL,
+    val tolerancePercent: Double = 0.0,
+    val autoDisableOnTrigger: Boolean = true,
+) : AlertCondition {
+    override val conditionDisplayName: String
+        get() {
+            val dirText = when (direction) {
+                PriceTargetDirection.BELOW_OR_EQUAL -> "跌破或觸及"
+                PriceTargetDirection.ABOVE_OR_EQUAL -> "突破或觸及"
+            }
+            val tolText = if (tolerancePercent > 0.0) "（接近 ±${tolerancePercent}% 內）" else ""
+            return "股價 $dirText ${Formatters.formatPrice(targetPrice)}$tolText"
+        }
+
+    val shortTriggerTag: String
+        get() {
+            val symbol = when (direction) {
+                PriceTargetDirection.BELOW_OR_EQUAL -> "≤"
+                PriceTargetDirection.ABOVE_OR_EQUAL -> "≥"
+            }
+            return "目標價 $symbol${Formatters.formatPrice(targetPrice)}"
+        }
+}
+

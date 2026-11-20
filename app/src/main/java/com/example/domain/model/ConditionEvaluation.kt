@@ -360,6 +360,83 @@ class MarginMaintenanceEvaluator : ConditionEvaluator<MarginMaintenanceCondition
 }
 
 /**
+ * 絕對目標價評估器 (Price Target Evaluator)
+ */
+class PriceTargetEvaluator : ConditionEvaluator<PriceTargetCondition> {
+    override val conditionClass: KClass<PriceTargetCondition> = PriceTargetCondition::class
+
+    override fun evaluate(
+        condition: PriceTargetCondition,
+        snapshot: MarketSnapshot,
+    ): ConditionEvaluationResult {
+        val target = condition.targetPrice
+        val label = "目標價 ${Formatters.formatPrice(target)}"
+
+        if (target <= 0.0) {
+            return ConditionEvaluationResult(
+                isTriggered = false,
+                targetReferenceLabel = label,
+                targetReferencePrice = null,
+                distancePercent = null,
+                triggerTag = condition.shortTriggerTag,
+                statusMessage = "目標價無效",
+                isInsufficientData = true,
+            )
+        }
+
+        val currentPrice = snapshot.currentPrice
+        if (currentPrice <= 0.0) {
+            return ConditionEvaluationResult(
+                isTriggered = false,
+                targetReferenceLabel = label,
+                targetReferencePrice = target,
+                distancePercent = null,
+                triggerTag = condition.shortTriggerTag,
+                statusMessage = "尚無有效現價",
+                isInsufficientData = true,
+            )
+        }
+
+        val distancePercent = ((currentPrice - target) / target) * 100.0
+        val tolerance = condition.tolerancePercent.coerceAtLeast(0.0)
+
+        val triggered = when (condition.direction) {
+            PriceTargetDirection.BELOW_OR_EQUAL -> {
+                if (tolerance > 0.0) currentPrice <= target || abs(distancePercent) <= tolerance
+                else currentPrice <= target
+            }
+            PriceTargetDirection.ABOVE_OR_EQUAL -> {
+                if (tolerance > 0.0) currentPrice >= target || abs(distancePercent) <= tolerance
+                else currentPrice >= target
+            }
+        }
+
+        val statusMessage = when {
+            triggered && condition.direction == PriceTargetDirection.BELOW_OR_EQUAL ->
+                if (tolerance > 0.0 && currentPrice > target) "已接近目標價（現價 ${Formatters.formatPrice(currentPrice)}，相差 ${Formatters.formatSignedPercent(distancePercent)}）"
+                else "已跌破或觸及目標價 ${Formatters.formatPrice(target)}"
+            triggered && condition.direction == PriceTargetDirection.ABOVE_OR_EQUAL ->
+                if (tolerance > 0.0 && currentPrice < target) "已接近目標價（現價 ${Formatters.formatPrice(currentPrice)}，相差 ${Formatters.formatSignedPercent(distancePercent)}）"
+                else "已突破或觸及目標價 ${Formatters.formatPrice(target)}"
+            distancePercent > 0 ->
+                "高於目標價 ${Formatters.formatSignedPercent(distancePercent)}"
+            else ->
+                "低於目標價 ${Formatters.formatSignedPercent(distancePercent)}"
+        }
+
+        return ConditionEvaluationResult(
+            isTriggered = triggered,
+            targetReferenceLabel = label,
+            targetReferencePrice = target,
+            distancePercent = distancePercent,
+            triggerTag = condition.shortTriggerTag,
+            statusMessage = statusMessage,
+            isInsufficientData = false,
+        )
+    }
+}
+
+/**
  * Extensible Strategy Registry & Dispatcher for all AlertCondition implementations.
  * New evaluators can be registered via register(...) without modifying callers.
  */
@@ -371,6 +448,7 @@ object ConditionEngine {
         register(PeakDrawdownEvaluator())
         register(RsiEvaluator())
         register(MarginMaintenanceEvaluator())
+        register(PriceTargetEvaluator())
     }
 
     fun <T : AlertCondition> register(evaluator: ConditionEvaluator<T>) {

@@ -55,6 +55,12 @@ object Formatters {
         }
     }
 
+    fun formatPrice(price: Double): String {
+        val safe = if (price.isNaN() || price.isInfinite()) 0.0 else price
+        return if (safe % 1.0 == 0.0) safe.toLong().toString()
+        else String.format(Locale.US, "%.2f", safe)
+    }
+
     fun formatRawPriceForInput(price: Double, currency: MarketCurrency): String {
         val safe = if (price.isNaN() || price.isInfinite()) 0.0 else price
         return when (currency) {
