@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.StockApplication
 import com.example.data.local.AppPreferencesState
 import com.example.data.local.BuyRecordEntity
+import com.example.data.local.CachedQuoteEntity
 import com.example.data.local.WatchlistRuleEntity
 import com.example.data.remote.SimulatedMarketProvider
 import com.example.data.remote.SimulatedStockProfile
@@ -35,6 +36,14 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+
+private data class WatchlistCombineState(
+    val rules: List<WatchlistRuleEntity>,
+    val cachedQuotes: List<CachedQuoteEntity>,
+    val prefs: AppPreferencesState,
+    val refreshing: Boolean,
+    val rateWarning: Boolean,
+)
 
 data class WatchlistItemUi(
     val rule: WatchlistRuleEntity,
@@ -74,6 +83,9 @@ data class WatchlistUiState(
     val items: List<WatchlistItemUi> = emptyList(),
     val watchlistSimulatedStocks: List<SimulatedStockUi> = emptyList(),
     val builtInSimulatedStocks: List<SimulatedStockUi> = emptyList(),
+    val marketKeepRate: Double? = null,
+    val marketCallAccNum: Long? = null,
+    val marketExeAccNum: Long? = null,
 )
 
 data class PortfolioUiState(
@@ -121,6 +133,26 @@ class StockMonitorViewModel(
             initialValue = AppPreferencesState(),
         )
 
+    private val _marginSnapshotFlow = MutableStateFlow<com.example.data.remote.MarketMarginSnapshot?>(null)
+
+    init {
+        // 僅在使用者有啟用「融資維持率條件」或啟用「台股」監控時，才在背景向證交所 API 抓取
+        viewModelScope.launch {
+            try {
+                val rules = marketRepo.getEnabledRulesSnapshot()
+                val needsMargin = rules.any {
+                    it.condition is com.example.domain.model.MarginMaintenanceCondition ||
+                    it.currency == MarketCurrency.TWD
+                }
+                if (needsMargin) {
+                    val snap = marketRepo.fetchTwseMarginSnapshot()
+                    _marginSnapshotFlow.value = snap
+                }
+            } catch (_: Exception) {
+            }
+        }
+    }
+
     val watchlistUiState: StateFlow<WatchlistUiState> = combine(
         marketRepo.rulesFlow,
         marketRepo.cachedQuotesFlow,
@@ -128,6 +160,9 @@ class StockMonitorViewModel(
         _isRefreshing,
         _hasRateLimitWarning,
     ) { rules, cachedQuotes, prefs, refreshing, rateWarning ->
+        WatchlistCombineState(rules, cachedQuotes, prefs, refreshing, rateWarning)
+    }.combine(_marginSnapshotFlow) { state, marginSnap ->
+        val (rules, cachedQuotes, prefs, refreshing, rateWarning) = state
         val quoteMap = cachedQuotes.associate { it.symbol to it.toStockQuote() }
         val items = rules.map { rule ->
             val effectiveQuote = if (prefs.dataSourceMode == DataSourceMode.SIMULATED) {
@@ -239,6 +274,9 @@ class StockMonitorViewModel(
             items = items,
             watchlistSimulatedStocks = watchlistSimStocks,
             builtInSimulatedStocks = builtInSimStocks,
+            marketKeepRate = marginSnap?.keepRate,
+            marketCallAccNum = marginSnap?.callAccNum,
+            marketExeAccNum = marginSnap?.exeAccNum,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -288,6 +326,18 @@ class StockMonitorViewModel(
         viewModelScope.launch {
             _isRefreshing.value = true
             try {
+                // 僅在有設定維持率條件或台股標的時同步更新
+                val rules = marketRepo.getEnabledRulesSnapshot()
+                val needsMargin = rules.any {
+                    it.condition is com.example.domain.model.MarginMaintenanceCondition ||
+                    it.currency == MarketCurrency.TWD
+                }
+                if (needsMargin) {
+                    val snap = marketRepo.fetchTwseMarginSnapshot()
+                    if (snap != null) {
+                        _marginSnapshotFlow.value = snap
+                    }
+                }
                 val summary = marketRepo.refreshAllEnabledRules(sendNotifications = sendNotifications)
                 _hasRateLimitWarning.value = summary.hasRateLimitOrNetworkIssue
                 _snackbarMessage.value = summary.statusMessage

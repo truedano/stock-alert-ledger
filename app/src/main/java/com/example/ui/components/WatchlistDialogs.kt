@@ -78,6 +78,7 @@ enum class RuleConditionCategory(val title: String) {
     MOVING_AVERAGE("均線 (SMA)"),
     PEAK_DRAWDOWN("波段回撤抄底"),
     RSI("RSI 指標"),
+    MARGIN("融資維持率斷頭"),
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -102,6 +103,7 @@ fun AddEditRuleDialog(
     val initialCategory = when (initialCond) {
         is PeakDrawdownCondition -> RuleConditionCategory.PEAK_DRAWDOWN
         is RsiCondition -> RuleConditionCategory.RSI
+        is com.example.domain.model.MarginMaintenanceCondition -> RuleConditionCategory.MARGIN
         else -> RuleConditionCategory.MOVING_AVERAGE
     }
     var selectedCategory by remember(editingRule) { mutableStateOf(initialCategory) }
@@ -146,6 +148,21 @@ fun AddEditRuleDialog(
         mutableStateOf(initialRsi?.isAbove ?: true)
     }
 
+    // 融資維持率條件狀態
+    val initialMargin = initialCond as? com.example.domain.model.MarginMaintenanceCondition
+    var isMarginExitMode by remember(editingRule) {
+        mutableStateOf(initialMargin?.isExitMode ?: false)
+    }
+    var marginPanicThresholdText by remember(editingRule) {
+        mutableStateOf((initialMargin?.panicThreshold?.toInt() ?: 150).toString())
+    }
+    var marginReboundPointsText by remember(editingRule) {
+        mutableStateOf((initialMargin?.reboundPoints?.toInt() ?: 20).toString())
+    }
+    var marginExitThresholdText by remember(editingRule) {
+        mutableStateOf((initialMargin?.exitThreshold?.toInt() ?: 170).toString())
+    }
+
     var tickerInput by remember(editingRule) {
         mutableStateOf(editingRule?.displaySymbol ?: "")
     }
@@ -178,6 +195,10 @@ fun AddEditRuleDialog(
     val effectiveRsiPeriod = rsiPeriodText.toIntOrNull() ?: 14
     val effectiveRsiThreshold = rsiThresholdText.toDoubleOrNull() ?: 70.0
 
+    val effectivePanic = marginPanicThresholdText.toDoubleOrNull() ?: 150.0
+    val effectiveRebound = marginReboundPointsText.toDoubleOrNull() ?: 20.0
+    val effectiveExit = marginExitThresholdText.toDoubleOrNull() ?: 170.0
+
     val isConditionValid = when (selectedCategory) {
         RuleConditionCategory.MOVING_AVERAGE -> {
             effectivePeriod in 1..3000 &&
@@ -188,6 +209,10 @@ fun AddEditRuleDialog(
         }
         RuleConditionCategory.RSI -> {
             effectiveRsiPeriod in 2..200 && effectiveRsiThreshold in 1.0..99.0
+        }
+        RuleConditionCategory.MARGIN -> {
+            if (isMarginExitMode) effectiveExit in 100.0..300.0
+            else effectivePanic in 100.0..200.0 && effectiveRebound in 1.0..50.0
         }
     }
 
@@ -587,6 +612,85 @@ fun AddEditRuleDialog(
                             color = BrandSky,
                         )
                     }
+
+                    RuleConditionCategory.MARGIN -> {
+                        Text(
+                            text = "維持率監控模式",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = TextPrimary,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            FilterChip(
+                                selected = !isMarginExitMode,
+                                onClick = { isMarginExitMode = false },
+                                label = { Text("斷頭反彈抄底") },
+                                modifier = Modifier.weight(1f),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = BrandSkyContainer,
+                                    selectedLabelColor = BrandSky,
+                                ),
+                            )
+                            FilterChip(
+                                selected = isMarginExitMode,
+                                onClick = { isMarginExitMode = true },
+                                label = { Text("回升安全停利") },
+                                modifier = Modifier.weight(1f),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = BrandSkyContainer,
+                                    selectedLabelColor = BrandSky,
+                                ),
+                            )
+                        }
+
+                        if (!isMarginExitMode) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                OutlinedTextField(
+                                    value = marginPanicThresholdText,
+                                    onValueChange = { marginPanicThresholdText = it.filter { ch -> ch.isDigit() } },
+                                    label = { Text("恐慌斷頭線 (%)") },
+                                    suffix = { Text("%") },
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    modifier = Modifier.weight(1f),
+                                )
+                                OutlinedTextField(
+                                    value = marginReboundPointsText,
+                                    onValueChange = { marginReboundPointsText = it.filter { ch -> ch.isDigit() } },
+                                    label = { Text("低點反彈點數") },
+                                    suffix = { Text("點") },
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                            Text(
+                                text = "💡 實證經典參數：全市場融資維持率跌破 150% 後自低點強彈 +20 點（或 0050 維持率破 155% 彈 5 點），2005~2026 長期實證能最精準捕捉台股急殺大底！",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = AlertAmber,
+                            )
+                        } else {
+                            OutlinedTextField(
+                                value = marginExitThresholdText,
+                                onValueChange = { marginExitThresholdText = it.filter { ch -> ch.isDigit() } },
+                                label = { Text("安全出場水位 (%)") },
+                                suffix = { Text("%") },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Text(
+                                text = "💡 出場停泊策略：當全市場融資維持率回升至 170% 以上，代表籌碼全面回溫、多頭脫離風險，賣出衛星部位，資金回防現金停泊。",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = BrandSky,
+                            )
+                        }
+                    }
                 }
 
                 // Planned Buy Amount
@@ -642,6 +746,12 @@ fun AddEditRuleDialog(
                                     periodDays = effectiveRsiPeriod,
                                     threshold = effectiveRsiThreshold,
                                     isAbove = rsiIsAbove,
+                                )
+                                RuleConditionCategory.MARGIN -> com.example.domain.model.MarginMaintenanceCondition(
+                                    panicThreshold = effectivePanic,
+                                    reboundPoints = effectiveRebound,
+                                    isExitMode = isMarginExitMode,
+                                    exitThreshold = effectiveExit,
                                 )
                             }
                             onSave(
@@ -883,6 +993,8 @@ fun BuyRecordDialog(
                     (
                         listOf(
                             "手動買入",
+                            "融資破150%反彈+20",
+                            "維持率回升>170%",
                             "波段高點回撤 -20%",
                             "波段高點回撤 -25%",
                             "波段高點回撤 -30%",

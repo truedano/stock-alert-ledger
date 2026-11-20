@@ -175,6 +175,9 @@ fun WatchlistScreen(
                             isRefreshing = uiState.isRefreshing,
                             hasRateLimitWarning = uiState.hasRateLimitWarning,
                             onRefreshClick = onRefresh,
+                            marketKeepRate = uiState.marketKeepRate,
+                            marketCallAccNum = uiState.marketCallAccNum,
+                            marketExeAccNum = uiState.marketExeAccNum,
                         )
                     }
 
@@ -408,9 +411,10 @@ private fun WatchlistRuleCard(
                     )
                     Text(
                         text = when {
-                            rule.condition is com.example.domain.model.RsiCondition -> {
+                            rule.condition is com.example.domain.model.RsiCondition ||
+                            rule.condition is com.example.domain.model.MarginMaintenanceCondition -> {
                                 eval?.targetReferencePrice?.let {
-                                    String.format(java.util.Locale.US, "%.1f", it)
+                                    "${String.format(java.util.Locale.US, "%.1f", it)}%"
                                 } ?: "--"
                             }
                             else -> {
@@ -432,11 +436,18 @@ private fun WatchlistRuleCard(
                             shape = RoundedCornerShape(6.dp),
                             color = pillBg,
                         ) {
-                            val distLabel = if (rule.condition is com.example.domain.model.RsiCondition) {
-                                val sign = if (dist > 0) "+" else ""
-                                "差額 $sign${String.format(java.util.Locale.US, "%.1f", dist)}"
-                            } else {
-                                "距目標 ${Formatters.formatSignedPercent(dist)}"
+                            val distLabel = when (rule.condition) {
+                                is com.example.domain.model.RsiCondition -> {
+                                    val sign = if (dist > 0) "+" else ""
+                                    "差額 $sign${String.format(java.util.Locale.US, "%.1f", dist)}"
+                                }
+                                is com.example.domain.model.MarginMaintenanceCondition -> {
+                                    val sign = if (dist > 0) "+" else ""
+                                    "反彈 $sign${String.format(java.util.Locale.US, "%.1f", dist)} 點"
+                                }
+                                else -> {
+                                    "距目標 ${Formatters.formatSignedPercent(dist)}"
+                                }
                             }
                             Text(
                                 text = distLabel,

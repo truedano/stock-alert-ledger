@@ -61,6 +61,39 @@ class StrategyConditionEvaluationTest {
     }
 
     @Test
+    fun `test margin maintenance evaluator triggers on panic drop and rebound`() {
+        // 曾跌到 138.0 (破 150%)，現價反彈至 158.5 (反彈 20.5 點 >= 20 點)
+        val snapshotRebound = MarketSnapshot(
+            symbol = "0050.TW",
+            currentPrice = 85.0,
+            historicalCloses = listOf(80.0, 85.0),
+            marketKeepRate = 158.5,
+            recentMarketKeepRates = listOf(160.0, 148.0, 138.0, 145.0, 158.5),
+        )
+
+        val marginCond = MarginMaintenanceCondition(
+            panicThreshold = 150.0,
+            reboundPoints = 20.0,
+            isExitMode = false,
+        )
+        val result = ConditionEngine.evaluate(marginCond, snapshotRebound)
+
+        assertTrue(result.isTriggered)
+        assertEquals(20.5, result.distancePercent ?: 0.0, 0.001)
+        assertTrue(result.statusMessage.contains("觸發黃金抄底"))
+
+        // 測試出場模式：回升至 170% 以上
+        val exitCond = MarginMaintenanceCondition(isExitMode = true, exitThreshold = 170.0)
+        val resultNotExit = ConditionEngine.evaluate(exitCond, snapshotRebound)
+        assertFalse(resultNotExit.isTriggered) // 158.5 < 170.0
+
+        val snapshotHigh = snapshotRebound.copy(marketKeepRate = 172.0)
+        val resultExit = ConditionEngine.evaluate(exitCond, snapshotHigh)
+        assertTrue(resultExit.isTriggered)
+        assertTrue(resultExit.statusMessage.contains("獲利退回安全停泊"))
+    }
+
+    @Test
     fun `test insufficient data handling`() {
         val emptySnapshot = MarketSnapshot(
             symbol = "0050.TW",

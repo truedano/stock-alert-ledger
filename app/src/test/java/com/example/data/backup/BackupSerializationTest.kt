@@ -1,6 +1,7 @@
 package com.example.data.backup
 
 import com.example.domain.model.AlertCondition
+import com.example.domain.model.MarginMaintenanceCondition
 import com.example.domain.model.MarketCurrency
 import com.example.domain.model.MovingAverageCondition
 import com.example.domain.model.MovingAverageTriggerMode
@@ -102,22 +103,34 @@ class BackupSerializationTest {
             isEnabled = true,
             isTriggered = false
         )
+        val ruleMargin = WatchlistRuleBackupDto(
+            symbol = "0050.TW",
+            displaySymbol = "0050",
+            name = "元大台灣50",
+            currency = MarketCurrency.TWD,
+            condition = MarginMaintenanceCondition(panicThreshold = 150.0, reboundPoints = 20.0),
+            plannedBuyAmount = 50000.0,
+            isEnabled = true,
+            isTriggered = false
+        )
         val backupData = AppBackupData(
             version = 1,
             exportedAt = 1731672000000L,
             appVersionName = "1.4.0",
-            watchlistRules = listOf(ruleDrawdown, ruleRsi),
+            watchlistRules = listOf(ruleDrawdown, ruleRsi, ruleMargin),
             buyRecords = emptyList()
         )
 
         val encoded = json.encodeToString(AppBackupData.serializer(), backupData)
         assertTrue(encoded.contains("peak_drawdown"))
         assertTrue(encoded.contains("rsi"))
+        assertTrue(encoded.contains("margin_maintenance"))
 
         val decoded = json.decodeFromString(AppBackupData.serializer(), encoded)
-        assertEquals(2, decoded.watchlistRules.size)
+        assertEquals(3, decoded.watchlistRules.size)
         assertTrue(decoded.watchlistRules[0].condition is PeakDrawdownCondition)
         assertTrue(decoded.watchlistRules[1].condition is RsiCondition)
+        assertTrue(decoded.watchlistRules[2].condition is MarginMaintenanceCondition)
     }
 
     @Test
