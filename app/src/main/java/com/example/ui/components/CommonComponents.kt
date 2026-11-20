@@ -182,6 +182,9 @@ fun WatchlistStatusHeader(
     isRefreshing: Boolean,
     hasRateLimitWarning: Boolean,
     onRefreshClick: () -> Unit,
+    marketKeepRate: Double? = null,
+    marketCallAccNum: Long? = null,
+    marketExeAccNum: Long? = null,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -244,6 +247,71 @@ fun WatchlistStatusHeader(
                     style = FinancialTextStyles.numericSmall,
                     color = TextSecondary,
                 )
+
+                if (marketKeepRate != null && marketKeepRate > 0.0) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    val isPanic = marketKeepRate < 150.0
+                    val isWarm = marketKeepRate >= 170.0
+                    val badgeColor = when {
+                        isPanic -> TaiwanRed
+                        isWarm -> TaiwanGreen
+                        else -> AlertAmber
+                    }
+                    val badgeBg = when {
+                        isPanic -> TaiwanRedContainer
+                        isWarm -> TaiwanGreenContainer
+                        else -> AlertAmberContainer
+                    }
+                    val statusText = when {
+                        isPanic -> "🚨 極端恐慌斷頭區 (<150%)"
+                        isWarm -> "🟢 籌碼安全水位 (≥170%)"
+                        else -> "⚠️ 融資警戒調整區 (150%~170%)"
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = badgeBg.copy(alpha = 0.7f),
+                        border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.4f)),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 10.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column {
+                                Text(
+                                    text = "全市場融資維持率：${String.format(java.util.Locale.US, "%.1f", marketKeepRate)}%",
+                                    style = FinancialTextStyles.numericMedium,
+                                    color = badgeColor,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                Text(
+                                    text = statusText,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary,
+                                )
+                            }
+                            if (marketCallAccNum != null && marketExeAccNum != null) {
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(
+                                        text = "追繳 $marketCallAccNum 戶",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = TextSecondary,
+                                    )
+                                    Text(
+                                        text = "處分 $marketExeAccNum 戶",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (marketExeAccNum > 100) TaiwanRed else TextSecondary,
+                                        fontWeight = if (marketExeAccNum > 100) FontWeight.Bold else FontWeight.Normal,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
 
                 if (hasRateLimitWarning) {
                     Spacer(modifier = Modifier.height(6.dp))

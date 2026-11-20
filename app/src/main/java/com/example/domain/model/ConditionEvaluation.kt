@@ -8,6 +8,8 @@ data class MarketSnapshot(
     val currentPrice: Double,
     val historicalCloses: List<Double>,
     val movingAverages: Map<Int, Double> = emptyMap(),
+    val marketKeepRate: Double? = null,
+    val recentMarketKeepRates: List<Double> = emptyList(),
 ) {
     val availableDays: Int get() = historicalCloses.size
 
@@ -289,6 +291,75 @@ class RsiEvaluator : ConditionEvaluator<RsiCondition> {
 }
 
 /**
+ * 融資維持率斷頭與反彈抄底評估器
+ */
+class MarginMaintenanceEvaluator : ConditionEvaluator<MarginMaintenanceCondition> {
+    override val conditionClass: KClass<MarginMaintenanceCondition> = MarginMaintenanceCondition::class
+
+    override fun evaluate(
+        condition: MarginMaintenanceCondition,
+        snapshot: MarketSnapshot,
+    ): ConditionEvaluationResult {
+        val keepRate = snapshot.marketKeepRate
+        val label = "全市場融資維持率"
+
+        if (keepRate == null || keepRate <= 0.0) {
+            return ConditionEvaluationResult(
+                isTriggered = false,
+                targetReferenceLabel = label,
+                targetReferencePrice = null,
+                distancePercent = null,
+                triggerTag = condition.shortTriggerTag,
+                statusMessage = "尚未取得證交所最新全市場維持率資料",
+                isInsufficientData = true,
+            )
+        }
+
+        if (condition.isExitMode) {
+            val triggered = keepRate >= condition.exitThreshold
+            val diff = keepRate - condition.exitThreshold
+            val statusMessage = if (triggered) {
+                "目前維持率 ${String.format(java.util.Locale.US, "%.1f", keepRate)}%，已回升至 ${condition.exitThreshold.toInt()}% 安全水位（獲利退回安全停泊）"
+            } else {
+                "目前維持率 ${String.format(java.util.Locale.US, "%.1f", keepRate)}%（目標回升至 ${condition.exitThreshold.toInt()}%）"
+            }
+            return ConditionEvaluationResult(
+                isTriggered = triggered,
+                targetReferenceLabel = "$label (目標>${condition.exitThreshold.toInt()}%)",
+                targetReferencePrice = keepRate,
+                distancePercent = diff,
+                triggerTag = condition.shortTriggerTag,
+                statusMessage = statusMessage,
+                isInsufficientData = false,
+            )
+        } else {
+            // 抄底條件：波段曾跌破 panicThreshold，且從低點反彈 >= reboundPoints
+            val rates = snapshot.recentMarketKeepRates.ifEmpty { listOf(keepRate) }
+            val minRate = rates.minOrNull() ?: keepRate
+            val reboundFromMin = keepRate - minRate
+            val hasDroppedBelow = minRate <= condition.panicThreshold
+            val triggered = hasDroppedBelow && reboundFromMin >= condition.reboundPoints
+
+            val statusMessage = when {
+                triggered -> "融資維持率曾跌至 ${String.format(java.util.Locale.US, "%.1f", minRate)}%（破${condition.panicThreshold.toInt()}%），現已反彈 +${String.format(java.util.Locale.US, "%.1f", reboundFromMin)} 點至 ${String.format(java.util.Locale.US, "%.1f", keepRate)}%（觸發黃金抄底）"
+                hasDroppedBelow -> "維持率低點 ${String.format(java.util.Locale.US, "%.1f", minRate)}%，目前 ${String.format(java.util.Locale.US, "%.1f", keepRate)}%（反彈 +${String.format(java.util.Locale.US, "%.1f", reboundFromMin)} 點，等待 +${condition.reboundPoints.toInt()} 點確認）"
+                else -> "目前維持率 ${String.format(java.util.Locale.US, "%.1f", keepRate)}%（警戒門檻 ${condition.panicThreshold.toInt()}%）"
+            }
+
+            return ConditionEvaluationResult(
+                isTriggered = triggered,
+                targetReferenceLabel = "$label (破${condition.panicThreshold.toInt()}%彈+${condition.reboundPoints.toInt()})",
+                targetReferencePrice = keepRate,
+                distancePercent = reboundFromMin,
+                triggerTag = condition.shortTriggerTag,
+                statusMessage = statusMessage,
+                isInsufficientData = false,
+            )
+        }
+    }
+}
+
+/**
  * Extensible Strategy Registry & Dispatcher for all AlertCondition implementations.
  * New evaluators can be registered via register(...) without modifying callers.
  */
@@ -299,6 +370,7 @@ object ConditionEngine {
         register(MovingAverageEvaluator())
         register(PeakDrawdownEvaluator())
         register(RsiEvaluator())
+        register(MarginMaintenanceEvaluator())
     }
 
     fun <T : AlertCondition> register(evaluator: ConditionEvaluator<T>) {

@@ -90,3 +90,26 @@ data class RsiCondition(
     val shortTriggerTag: String
         get() = if (isAbove) "RSI>${threshold.toInt()}" else "RSI<${threshold.toInt()}"
 }
+
+/**
+ * 融資斷頭與反彈抄底條件：
+ * 針對大盤全市場信用交易融資維持率（例如跌破 150% 後自低點反彈 20 點）或出場（回升至 170%）
+ */
+@Serializable
+@SerialName("margin_maintenance")
+data class MarginMaintenanceCondition(
+    val panicThreshold: Double = 150.0,
+    val reboundPoints: Double = 20.0,
+    val isExitMode: Boolean = false,
+    val exitThreshold: Double = 170.0,
+) : AlertCondition {
+    override val conditionDisplayName: String
+        get() = if (isExitMode) {
+            "融資維持率回升至 ${exitThreshold.toInt()}% 以上（獲利退回安全停泊）"
+        } else {
+            "融資維持率跌破 ${panicThreshold.toInt()}% 且低點反彈 ${reboundPoints.toInt()} 點（恐慌斷頭抄底）"
+        }
+
+    val shortTriggerTag: String
+        get() = if (isExitMode) "維持率回升>${exitThreshold.toInt()}%" else "維持率<${panicThreshold.toInt()}%反彈+${reboundPoints.toInt()}"
+}

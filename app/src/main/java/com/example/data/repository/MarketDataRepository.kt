@@ -29,6 +29,7 @@ import kotlinx.coroutines.withContext
 class MarketDataRepository(
     private val appContext: Context,
     private val yahooFinanceService: YahooFinanceService,
+    private val twseMarginService: com.example.data.remote.TwseMarginService = com.example.data.remote.TwseMarginService(),
     private val watchlistDao: WatchlistDao,
     private val cachedQuoteDao: CachedQuoteDao,
     private val preferencesRepository: AppPreferencesRepository,
@@ -36,8 +37,24 @@ class MarketDataRepository(
     val rulesFlow: Flow<List<WatchlistRuleEntity>> = watchlistDao.observeAllRules()
     val cachedQuotesFlow: Flow<List<CachedQuoteEntity>> = cachedQuoteDao.observeAllQuotes()
 
+    private var latestMarginSnapshot: com.example.data.remote.MarketMarginSnapshot? = null
+
+    suspend fun fetchTwseMarginSnapshot(): com.example.data.remote.MarketMarginSnapshot? = withContext(Dispatchers.IO) {
+        val snapshot = twseMarginService.fetchMarketMarginSnapshot()
+        if (snapshot != null) {
+            latestMarginSnapshot = snapshot
+        }
+        latestMarginSnapshot
+    }
+
+    fun getLatestMarginSnapshot(): com.example.data.remote.MarketMarginSnapshot? = latestMarginSnapshot
+
     suspend fun getEnabledSymbols(): List<String> = withContext(Dispatchers.IO) {
         watchlistDao.getEnabledRules().map { it.symbol }.distinct()
+    }
+
+    suspend fun getEnabledRulesSnapshot(): List<WatchlistRuleEntity> = withContext(Dispatchers.IO) {
+        watchlistDao.getEnabledRules()
     }
 
     suspend fun getPreferencesSnapshot() = withContext(Dispatchers.IO) {
@@ -142,6 +159,19 @@ class MarketDataRepository(
                     statusMessage = msg,
                     hasRateLimitOrNetworkIssue = false,
                 )
+            }
+
+            // 僅在有設定「融資維持率條件」或啟用「台股」標的時，才向證交所抓取全市場維持率
+            val hasMarginCondition = rules.any {
+                it.condition is com.example.domain.model.MarginMaintenanceCondition ||
+                it.currency == MarketCurrency.TWD
+            }
+            if (hasMarginCondition && prefs.dataSourceMode == DataSourceMode.REAL) {
+                try {
+                    fetchTwseMarginSnapshot()
+                } catch (_: Exception) {
+                    // non-fatal
+                }
             }
 
             // Group rules by symbol so we fetch each ticker once per cycle
@@ -301,10 +331,13 @@ class MarketDataRepository(
 
     fun evaluateRule(rule: WatchlistRuleEntity, quote: StockQuote?): ConditionEvaluationResult? {
         if (quote == null) return null
+        val marginSnapshot = latestMarginSnapshot
         val snapshot = MarketSnapshot(
             symbol = quote.symbol,
             currentPrice = quote.currentPrice,
             historicalCloses = quote.closeHistory,
+            marketKeepRate = marginSnapshot?.keepRate,
+            recentMarketKeepRates = marginSnapshot?.recentKeepRates ?: emptyList(),
         )
         return ConditionEngine.evaluate(rule.condition, snapshot)
     }
