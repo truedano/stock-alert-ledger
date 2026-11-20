@@ -579,20 +579,78 @@ private fun WatchlistRuleCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "條件：${rule.condition.conditionDisplayName}",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = TextSecondary,
-                    )
-                    val estStr = item.estimatedShares?.let {
-                        "（約 ${Formatters.formatShares(it)} 股）"
-                    }.orEmpty()
-                    Text(
-                        text = "預定買入：${Formatters.formatAmount(rule.plannedBuyAmount, rule.currency)}$estStr",
-                        style = FinancialTextStyles.numericSmall,
-                        color = TextPrimary,
-                    )
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    // 條件標籤化 (Badge) & 觸發狀態聯動高亮
+                    val conditionBadgeBg = if (isTriggered) AlertAmberContainer else SurfaceCardHigh
+                    val conditionBadgeBorder = if (isTriggered) AlertAmber else HairlineBorder
+                    val conditionTextColor = if (isTriggered) AlertAmber else TextPrimary
+                    val conditionLabel = when (val cond = rule.condition) {
+                        is com.example.domain.model.MovingAverageCondition -> {
+                            val modeStr = if (cond.triggerMode == com.example.domain.model.MovingAverageTriggerMode.BELOW_OR_EQUAL) {
+                                "跌破/觸及"
+                            } else {
+                                "接近(±${cond.tolerancePercent}%)"
+                            }
+                            val periodName = com.example.domain.model.MovingAverageCondition.maPeriodLabel(cond.periodDays)
+                            "$modeStr $periodName"
+                        }
+                        else -> rule.condition.conditionDisplayName
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = conditionBadgeBg,
+                        border = BorderStroke(1.dp, conditionBadgeBorder),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            if (isTriggered) {
+                                Icon(
+                                    imageVector = Icons.Rounded.NotificationsActive,
+                                    contentDescription = null,
+                                    tint = AlertAmber,
+                                    modifier = Modifier.size(13.dp),
+                                )
+                            }
+                            Text(
+                                text = conditionLabel,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = conditionTextColor,
+                                fontWeight = if (isTriggered) FontWeight.Bold else FontWeight.Medium,
+                            )
+                        }
+                    }
+
+                    // 預定買入與股數主次分離
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = "預定買入",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextSecondary,
+                        )
+                        Text(
+                            text = Formatters.formatAmount(rule.plannedBuyAmount, rule.currency),
+                            style = FinancialTextStyles.numericSmall,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        item.estimatedShares?.let { shares ->
+                            Text(
+                                text = "(${Formatters.formatShares(shares)} 股)",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextSecondary,
+                            )
+                        }
+                    }
                 }
 
                 Row {
