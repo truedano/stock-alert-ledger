@@ -4,6 +4,8 @@ import com.example.domain.model.AlertCondition
 import com.example.domain.model.MarketCurrency
 import com.example.domain.model.MovingAverageCondition
 import com.example.domain.model.MovingAverageTriggerMode
+import com.example.domain.model.PeakDrawdownCondition
+import com.example.domain.model.RsiCondition
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -76,6 +78,46 @@ class BackupSerializationTest {
         val decodedRecord = decoded.buyRecords[0]
         assertEquals(100.0, decodedRecord.shares, 0.001)
         assertEquals(100000.0, decodedRecord.totalCost, 0.001)
+    }
+
+    @Test
+    fun `test serialization of new PeakDrawdownCondition and RsiCondition`() {
+        val ruleDrawdown = WatchlistRuleBackupDto(
+            symbol = "0050.TW",
+            displaySymbol = "0050",
+            name = "元大台灣50",
+            currency = MarketCurrency.TWD,
+            condition = PeakDrawdownCondition(lookbackDays = 250, drawdownPercent = 20.0),
+            plannedBuyAmount = 100000.0,
+            isEnabled = true,
+            isTriggered = false
+        )
+        val ruleRsi = WatchlistRuleBackupDto(
+            symbol = "00631L.TW",
+            displaySymbol = "00631L",
+            name = "元大台灣50正2",
+            currency = MarketCurrency.TWD,
+            condition = RsiCondition(periodDays = 14, threshold = 70.0, isAbove = true),
+            plannedBuyAmount = 30000.0,
+            isEnabled = true,
+            isTriggered = false
+        )
+        val backupData = AppBackupData(
+            version = 1,
+            exportedAt = 1731672000000L,
+            appVersionName = "1.4.0",
+            watchlistRules = listOf(ruleDrawdown, ruleRsi),
+            buyRecords = emptyList()
+        )
+
+        val encoded = json.encodeToString(AppBackupData.serializer(), backupData)
+        assertTrue(encoded.contains("peak_drawdown"))
+        assertTrue(encoded.contains("rsi"))
+
+        val decoded = json.decodeFromString(AppBackupData.serializer(), encoded)
+        assertEquals(2, decoded.watchlistRules.size)
+        assertTrue(decoded.watchlistRules[0].condition is PeakDrawdownCondition)
+        assertTrue(decoded.watchlistRules[1].condition is RsiCondition)
     }
 
     @Test

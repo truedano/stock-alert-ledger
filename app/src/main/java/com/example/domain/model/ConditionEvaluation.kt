@@ -53,6 +53,58 @@ object MovingAverageCalculator {
         }
         return result
     }
+
+    /**
+     * 計算指定天數內最高收盤價（波段高點）
+     */
+    fun calculatePeriodHigh(closes: List<Double>, lookbackDays: Int): Double? {
+        if (lookbackDays <= 0 || closes.isEmpty()) return null
+        val slice = closes.takeLast(lookbackDays)
+        if (slice.isEmpty()) return null
+        val maxVal = slice.maxOrNull() ?: return null
+        return if (maxVal.isNaN() || maxVal.isInfinite() || maxVal <= 0.0) null else maxVal
+    }
+
+    /**
+     * 計算標準 RSI（相對強弱指標，Wilder 平滑法）
+     */
+    fun calculateRsi(closes: List<Double>, periodDays: Int = 14): Double? {
+        if (periodDays <= 0 || closes.size <= periodDays) return null
+
+        val deltas = mutableListOf<Double>()
+        for (i in 1 until closes.size) {
+            deltas.add(closes[i] - closes[i - 1])
+        }
+
+        if (deltas.size < periodDays) return null
+
+        // 初始第一組平均收益與損失
+        var avgGain = 0.0
+        var avgLoss = 0.0
+        for (i in 0 until periodDays) {
+            val d = deltas[i]
+            if (d > 0) avgGain += d else avgLoss += -d
+        }
+        avgGain /= periodDays
+        avgLoss /= periodDays
+
+        // Wilder 平滑遞推
+        for (i in periodDays until deltas.size) {
+            val d = deltas[i]
+            val gain = if (d > 0) d else 0.0
+            val loss = if (d < 0) -d else 0.0
+
+            avgGain = (avgGain * (periodDays - 1) + gain) / periodDays
+            avgLoss = (avgLoss * (periodDays - 1) + loss) / periodDays
+        }
+
+        if (avgLoss == 0.0) {
+            return if (avgGain == 0.0) 50.0 else 100.0
+        }
+        val rs = avgGain / avgLoss
+        val rsi = 100.0 - (100.0 / (1.0 + rs))
+        return if (rsi.isNaN() || rsi.isInfinite()) null else rsi
+    }
 }
 
 class MovingAverageEvaluator : ConditionEvaluator<MovingAverageCondition> {
@@ -126,6 +178,117 @@ class MovingAverageEvaluator : ConditionEvaluator<MovingAverageCondition> {
 }
 
 /**
+ * 波段高點回撤抄底評估器
+ */
+class PeakDrawdownEvaluator : ConditionEvaluator<PeakDrawdownCondition> {
+    override val conditionClass: KClass<PeakDrawdownCondition> = PeakDrawdownCondition::class
+
+    override fun evaluate(
+        condition: PeakDrawdownCondition,
+        snapshot: MarketSnapshot,
+    ): ConditionEvaluationResult {
+        val peakPrice = MovingAverageCalculator.calculatePeriodHigh(snapshot.historicalCloses, condition.lookbackDays)
+        val label = "${condition.lookbackDays}日高點"
+
+        if (peakPrice == null || peakPrice <= 0.0) {
+            return ConditionEvaluationResult(
+                isTriggered = false,
+                targetReferenceLabel = label,
+                targetReferencePrice = null,
+                distancePercent = null,
+                triggerTag = condition.shortTriggerTag,
+                statusMessage = "歷史資料不足計算 ${condition.lookbackDays} 日高點",
+                isInsufficientData = true,
+            )
+        }
+
+        val currentPrice = snapshot.currentPrice
+        if (currentPrice <= 0.0) {
+            return ConditionEvaluationResult(
+                isTriggered = false,
+                targetReferenceLabel = label,
+                targetReferencePrice = peakPrice,
+                distancePercent = null,
+                triggerTag = condition.shortTriggerTag,
+                statusMessage = "尚無有效現價",
+                isInsufficientData = true,
+            )
+        }
+
+        // 回撤百分比：例如高點 100 現價 80，drawdown = ((80 - 100) / 100) * 100 = -20%
+        val drawdownFromPeak = ((currentPrice - peakPrice) / peakPrice) * 100.0
+        // 目標價格（例如跌幅 20% 對應價格 = peak * 0.8）
+        val targetTriggerPrice = peakPrice * (1.0 - (condition.drawdownPercent / 100.0))
+        val triggered = drawdownFromPeak <= -condition.drawdownPercent
+
+        val statusMessage = if (triggered) {
+            "自${label} (${Formatters.formatPrice(peakPrice, MarketCurrency.TWD)}) 回撤達 ${String.format(java.util.Locale.US, "%.1f", drawdownFromPeak)}% (觸發抄底)"
+        } else {
+            "距${label}回撤 ${String.format(java.util.Locale.US, "%.1f", drawdownFromPeak)}%（目標 -${condition.drawdownPercent.toInt()}%）"
+        }
+
+        return ConditionEvaluationResult(
+            isTriggered = triggered,
+            targetReferenceLabel = "${label} -${condition.drawdownPercent.toInt()}%",
+            targetReferencePrice = targetTriggerPrice,
+            distancePercent = drawdownFromPeak,
+            triggerTag = condition.shortTriggerTag,
+            statusMessage = statusMessage,
+            isInsufficientData = false,
+        )
+    }
+}
+
+/**
+ * RSI 相對強弱指標評估器
+ */
+class RsiEvaluator : ConditionEvaluator<RsiCondition> {
+    override val conditionClass: KClass<RsiCondition> = RsiCondition::class
+
+    override fun evaluate(
+        condition: RsiCondition,
+        snapshot: MarketSnapshot,
+    ): ConditionEvaluationResult {
+        val rsi = MovingAverageCalculator.calculateRsi(snapshot.historicalCloses, condition.periodDays)
+        val label = "RSI(${condition.periodDays})"
+
+        if (rsi == null) {
+            return ConditionEvaluationResult(
+                isTriggered = false,
+                targetReferenceLabel = label,
+                targetReferencePrice = null,
+                distancePercent = null,
+                triggerTag = condition.shortTriggerTag,
+                statusMessage = "歷史收盤價不足計算 RSI(${condition.periodDays})",
+                isInsufficientData = true,
+            )
+        }
+
+        val triggered = if (condition.isAbove) rsi >= condition.threshold else rsi <= condition.threshold
+        val diff = rsi - condition.threshold
+        val statusMessage = if (triggered) {
+            if (condition.isAbove) "目前 $label 為 ${String.format(java.util.Locale.US, "%.1f", rsi)}，已突破 ${condition.threshold.toInt()}（超買反彈調節區）"
+            else "目前 $label 為 ${String.format(java.util.Locale.US, "%.1f", rsi)}，已跌破 ${condition.threshold.toInt()}（超賣恐慌區）"
+        } else {
+            "目前 $label 為 ${String.format(java.util.Locale.US, "%.1f", rsi)}（閾值 ${condition.threshold.toInt()}）"
+        }
+
+        val targetPrice = if (condition.isAbove) null else null // RSI 本身非價格指標
+        val rsiFormatted = String.format(java.util.Locale.US, "%.1f", rsi)
+
+        return ConditionEvaluationResult(
+            isTriggered = triggered,
+            targetReferenceLabel = "$label 現值",
+            targetReferencePrice = rsi, // 將目前計算出的 RSI 數值傳給 UI 顯示
+            distancePercent = diff,
+            triggerTag = condition.shortTriggerTag,
+            statusMessage = statusMessage,
+            isInsufficientData = false,
+        )
+    }
+}
+
+/**
  * Extensible Strategy Registry & Dispatcher for all AlertCondition implementations.
  * New evaluators can be registered via register(...) without modifying callers.
  */
@@ -134,6 +297,8 @@ object ConditionEngine {
 
     init {
         register(MovingAverageEvaluator())
+        register(PeakDrawdownEvaluator())
+        register(RsiEvaluator())
     }
 
     fun <T : AlertCondition> register(evaluator: ConditionEvaluator<T>) {

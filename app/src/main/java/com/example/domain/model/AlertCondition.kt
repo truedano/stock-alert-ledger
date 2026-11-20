@@ -54,3 +54,39 @@ data class MovingAverageCondition(
         }
     }
 }
+
+/**
+ * 極端恐慌抄底條件：自波段高點（預設 250 日 / 52 週最高收盤價）回撤達到指定百分比
+ * 例如 drawdownPercent = 20.0 表示從最高點下跌 20%
+ */
+@Serializable
+@SerialName("peak_drawdown")
+data class PeakDrawdownCondition(
+    val lookbackDays: Int = 250,
+    val drawdownPercent: Double = 20.0,
+) : AlertCondition {
+    override val conditionDisplayName: String
+        get() = "${lookbackDays}日高點回撤達 -${drawdownPercent.toInt()}%（恐慌抄底）"
+
+    val shortTriggerTag: String
+        get() = "波段高點回撤 -${drawdownPercent.toInt()}%"
+}
+
+/**
+ * 技術指標出場/超買條件：相對強弱指標 (RSI) 超買或超賣
+ * 例如 periodDays = 14, threshold = 70.0, isAbove = true 表示 RSI(14) > 70 獲利了結/過熱警示
+ */
+@Serializable
+@SerialName("rsi")
+data class RsiCondition(
+    val periodDays: Int = 14,
+    val threshold: Double = 70.0,
+    val isAbove: Boolean = true,
+) : AlertCondition {
+    override val conditionDisplayName: String
+        get() = if (isAbove) "RSI(${periodDays}) 突破 ${threshold.toInt()}（超買反彈調節）"
+                else "RSI(${periodDays}) 跌破 ${threshold.toInt()}（超賣恐慌）"
+
+    val shortTriggerTag: String
+        get() = if (isAbove) "RSI>${threshold.toInt()}" else "RSI<${threshold.toInt()}"
+}

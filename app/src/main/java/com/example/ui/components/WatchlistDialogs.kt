@@ -55,6 +55,8 @@ import com.example.domain.model.MarketCurrency
 import com.example.domain.model.MovingAverageCalculator
 import com.example.domain.model.MovingAverageCondition
 import com.example.domain.model.MovingAverageTriggerMode
+import com.example.domain.model.PeakDrawdownCondition
+import com.example.domain.model.RsiCondition
 import com.example.domain.model.StockQuote
 import com.example.notification.QuickBuyPrefill
 import com.example.ui.LookupUiState
@@ -71,6 +73,12 @@ import com.example.ui.theme.TaiwanRed
 import com.example.ui.theme.TaiwanRedContainer
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
+
+enum class RuleConditionCategory(val title: String) {
+    MOVING_AVERAGE("均線 (SMA)"),
+    PEAK_DRAWDOWN("波段回撤抄底"),
+    RSI("RSI 指標"),
+}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -90,13 +98,18 @@ fun AddEditRuleDialog(
         initialQuote: StockQuote?,
     ) -> Unit,
 ) {
-    val initialCond = editingRule?.condition as? MovingAverageCondition
-    val presetPeriods = listOf(5, 10, 20, 60, 120, 240, 720, 1200, 2400)
-    val initialPeriod = initialCond?.periodDays ?: 20
-
-    var tickerInput by remember(editingRule) {
-        mutableStateOf(editingRule?.displaySymbol ?: "")
+    val initialCond = editingRule?.condition
+    val initialCategory = when (initialCond) {
+        is PeakDrawdownCondition -> RuleConditionCategory.PEAK_DRAWDOWN
+        is RsiCondition -> RuleConditionCategory.RSI
+        else -> RuleConditionCategory.MOVING_AVERAGE
     }
+    var selectedCategory by remember(editingRule) { mutableStateOf(initialCategory) }
+
+    // MA 狀態
+    val initialMa = initialCond as? MovingAverageCondition
+    val presetPeriods = listOf(5, 10, 20, 60, 120, 240, 720, 1200, 2400)
+    val initialPeriod = initialMa?.periodDays ?: 20
     var selectedPeriod by remember(editingRule) { mutableStateOf(initialPeriod) }
     var isCustomPeriod by remember(editingRule) {
         mutableStateOf(initialPeriod !in presetPeriods)
@@ -105,10 +118,36 @@ fun AddEditRuleDialog(
         mutableStateOf(if (initialPeriod !in presetPeriods) initialPeriod.toString() else "")
     }
     var triggerMode by remember(editingRule) {
-        mutableStateOf(initialCond?.triggerMode ?: MovingAverageTriggerMode.BELOW_OR_EQUAL)
+        mutableStateOf(initialMa?.triggerMode ?: MovingAverageTriggerMode.BELOW_OR_EQUAL)
     }
     var toleranceText by remember(editingRule) {
-        mutableStateOf((initialCond?.tolerancePercent ?: 1.0).toString())
+        mutableStateOf((initialMa?.tolerancePercent ?: 1.0).toString())
+    }
+
+    // 波段回撤抄底狀態 (預設 -20%)
+    val initialDrawdown = initialCond as? PeakDrawdownCondition
+    val presetDrawdowns = listOf(10, 15, 20, 25, 30)
+    var selectedDrawdownPercent by remember(editingRule) {
+        mutableStateOf(initialDrawdown?.drawdownPercent?.toInt() ?: 20)
+    }
+    var drawdownLookbackDaysText by remember(editingRule) {
+        mutableStateOf((initialDrawdown?.lookbackDays ?: 250).toString())
+    }
+
+    // RSI 狀態 (預設 RSI 14 > 70 獲利了結)
+    val initialRsi = initialCond as? RsiCondition
+    var rsiPeriodText by remember(editingRule) {
+        mutableStateOf((initialRsi?.periodDays ?: 14).toString())
+    }
+    var rsiThresholdText by remember(editingRule) {
+        mutableStateOf((initialRsi?.threshold?.toInt() ?: 70).toString())
+    }
+    var rsiIsAbove by remember(editingRule) {
+        mutableStateOf(initialRsi?.isAbove ?: true)
+    }
+
+    var tickerInput by remember(editingRule) {
+        mutableStateOf(editingRule?.displaySymbol ?: "")
     }
     var plannedAmountText by remember(editingRule) {
         mutableStateOf(
@@ -135,11 +174,26 @@ fun AddEditRuleDialog(
     }
     val plannedAmount = plannedAmountText.toDoubleOrNull() ?: 0.0
     val tolerance = toleranceText.toDoubleOrNull() ?: 1.0
+    val effectiveLookback = drawdownLookbackDaysText.toIntOrNull() ?: 250
+    val effectiveRsiPeriod = rsiPeriodText.toIntOrNull() ?: 14
+    val effectiveRsiThreshold = rsiThresholdText.toDoubleOrNull() ?: 70.0
+
+    val isConditionValid = when (selectedCategory) {
+        RuleConditionCategory.MOVING_AVERAGE -> {
+            effectivePeriod in 1..3000 &&
+                (triggerMode == MovingAverageTriggerMode.BELOW_OR_EQUAL || tolerance >= 0.0)
+        }
+        RuleConditionCategory.PEAK_DRAWDOWN -> {
+            effectiveLookback in 10..3000 && selectedDrawdownPercent > 0
+        }
+        RuleConditionCategory.RSI -> {
+            effectiveRsiPeriod in 2..200 && effectiveRsiThreshold in 1.0..99.0
+        }
+    }
 
     val canSave = (verifiedQuote != null || editingRule != null) &&
-        effectivePeriod in 1..3000 &&
         plannedAmount > 0.0 &&
-        (triggerMode == MovingAverageTriggerMode.BELOW_OR_EQUAL || tolerance >= 0.0)
+        isConditionValid
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -296,107 +350,243 @@ fun AddEditRuleDialog(
                     }
                 }
 
-                // Extensible Condition Strategy Header
+                // 策略類型切換 Tabs
                 Text(
-                    text = "監控策略：移動平均線 (SMA)",
+                    text = "監控策略類型",
                     style = MaterialTheme.typography.labelLarge,
                     color = BrandSky,
                 )
-
-                // MA Period Selection
-                Text(
-                    text = "均線天數 (SMA)",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = TextPrimary,
-                )
-                FlowRow(
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    presetPeriods.forEach { period ->
-                        val selected = !isCustomPeriod && selectedPeriod == period
+                    RuleConditionCategory.entries.forEach { category ->
                         FilterChip(
-                            selected = selected,
-                            onClick = {
-                                isCustomPeriod = false
-                                selectedPeriod = period
-                            },
-                            label = {
-                                Text(
-                                    text = MovingAverageCondition.maPeriodLabel(period),
-                                    style = FinancialTextStyles.numericSmall,
-                                )
-                            },
+                            selected = selectedCategory == category,
+                            onClick = { selectedCategory = category },
+                            label = { Text(category.title) },
+                            modifier = Modifier.weight(1f),
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = BrandSkyContainer,
                                 selectedLabelColor = BrandSky,
                             ),
                         )
                     }
-                    FilterChip(
-                        selected = isCustomPeriod,
-                        onClick = { isCustomPeriod = true },
-                        label = { Text("自訂") },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = BrandSkyContainer,
-                            selectedLabelColor = BrandSky,
-                        ),
-                    )
                 }
 
-                if (isCustomPeriod) {
-                    OutlinedTextField(
-                        value = customPeriodText,
-                        onValueChange = { customPeriodText = it.filter { ch -> ch.isDigit() } },
-                        label = { Text("自訂均線天數 (1~3000)") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
+                when (selectedCategory) {
+                    RuleConditionCategory.MOVING_AVERAGE -> {
+                        // MA Period Selection
+                        Text(
+                            text = "均線天數 (SMA)",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = TextPrimary,
+                        )
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            presetPeriods.forEach { period ->
+                                val selected = !isCustomPeriod && selectedPeriod == period
+                                FilterChip(
+                                    selected = selected,
+                                    onClick = {
+                                        isCustomPeriod = false
+                                        selectedPeriod = period
+                                    },
+                                    label = {
+                                        Text(
+                                            text = MovingAverageCondition.maPeriodLabel(period),
+                                            style = FinancialTextStyles.numericSmall,
+                                        )
+                                    },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = BrandSkyContainer,
+                                        selectedLabelColor = BrandSky,
+                                    ),
+                                )
+                            }
+                            FilterChip(
+                                selected = isCustomPeriod,
+                                onClick = { isCustomPeriod = true },
+                                label = { Text("自訂") },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = BrandSkyContainer,
+                                    selectedLabelColor = BrandSky,
+                                    ),
+                            )
+                        }
 
-                // Trigger Mode Selection
-                Text(
-                    text = "觸發條件模式",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = TextPrimary,
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    FilterChip(
-                        selected = triggerMode == MovingAverageTriggerMode.BELOW_OR_EQUAL,
-                        onClick = { triggerMode = MovingAverageTriggerMode.BELOW_OR_EQUAL },
-                        label = { Text("跌破或觸及 (<=)") },
-                        modifier = Modifier.weight(1f),
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = BrandSkyContainer,
-                            selectedLabelColor = BrandSky,
-                        ),
-                    )
-                    FilterChip(
-                        selected = triggerMode == MovingAverageTriggerMode.WITHIN_PERCENT,
-                        onClick = { triggerMode = MovingAverageTriggerMode.WITHIN_PERCENT },
-                        label = { Text("接近均線誤差內") },
-                        modifier = Modifier.weight(1f),
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = BrandSkyContainer,
-                            selectedLabelColor = BrandSky,
-                        ),
-                    )
-                }
+                        if (isCustomPeriod) {
+                            OutlinedTextField(
+                                value = customPeriodText,
+                                onValueChange = { customPeriodText = it.filter { ch -> ch.isDigit() } },
+                                label = { Text("自訂均線天數 (1~3000)") },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
 
-                if (triggerMode == MovingAverageTriggerMode.WITHIN_PERCENT) {
-                    OutlinedTextField(
-                        value = toleranceText,
-                        onValueChange = { toleranceText = it },
-                        label = { Text("接近均線誤差百分比 (%)") },
-                        suffix = { Text("%") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                        // Trigger Mode Selection
+                        Text(
+                            text = "觸發條件模式",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = TextPrimary,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            FilterChip(
+                                selected = triggerMode == MovingAverageTriggerMode.BELOW_OR_EQUAL,
+                                onClick = { triggerMode = MovingAverageTriggerMode.BELOW_OR_EQUAL },
+                                label = { Text("跌破或觸及 (<=)") },
+                                modifier = Modifier.weight(1f),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = BrandSkyContainer,
+                                    selectedLabelColor = BrandSky,
+                                ),
+                            )
+                            FilterChip(
+                                selected = triggerMode == MovingAverageTriggerMode.WITHIN_PERCENT,
+                                onClick = { triggerMode = MovingAverageTriggerMode.WITHIN_PERCENT },
+                                label = { Text("接近均線誤差內") },
+                                modifier = Modifier.weight(1f),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = BrandSkyContainer,
+                                    selectedLabelColor = BrandSky,
+                                ),
+                            )
+                        }
+
+                        if (triggerMode == MovingAverageTriggerMode.WITHIN_PERCENT) {
+                            OutlinedTextField(
+                                value = toleranceText,
+                                onValueChange = { toleranceText = it },
+                                label = { Text("接近均線誤差百分比 (%)") },
+                                suffix = { Text("%") },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
+
+                    RuleConditionCategory.PEAK_DRAWDOWN -> {
+                        Text(
+                            text = "恐慌抄底回撤幅度（自波段高點下跌）",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = TextPrimary,
+                        )
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            presetDrawdowns.forEach { pct ->
+                                FilterChip(
+                                    selected = selectedDrawdownPercent == pct,
+                                    onClick = { selectedDrawdownPercent = pct },
+                                    label = { Text("-$pct%${if (pct == 20) " (黃金勝率)" else ""}") },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = BrandSkyContainer,
+                                        selectedLabelColor = BrandSky,
+                                    ),
+                                )
+                            }
+                        }
+
+                        OutlinedTextField(
+                            value = drawdownLookbackDaysText,
+                            onValueChange = { drawdownLookbackDaysText = it.filter { ch -> ch.isDigit() } },
+                            label = { Text("回撤計算週期天數 (預設 250 日 / 52 週)") },
+                            suffix = { Text("日") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+
+                        Text(
+                            text = "💡 歷史統計（2003~2026）：0050 自波段高點回撤達 -20% 時進場持有 1 年，勝率高達 85.7%。建議可分 2~3 批進場（例如 -20%、-25%、-30%）。",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = AlertAmber,
+                        )
+                    }
+
+                    RuleConditionCategory.RSI -> {
+                        Text(
+                            text = "RSI 判斷方向",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = TextPrimary,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            FilterChip(
+                                selected = rsiIsAbove,
+                                onClick = {
+                                    rsiIsAbove = true
+                                    // 點擊超買時，若原本是超賣的 30/20 或預設，自動帶入標準超買 70
+                                    if (rsiThresholdText == "30" || rsiThresholdText == "20") {
+                                        rsiThresholdText = "70"
+                                    }
+                                },
+                                label = { Text("高於閾值（超買/獲利反彈）") },
+                                modifier = Modifier.weight(1f),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = BrandSkyContainer,
+                                    selectedLabelColor = BrandSky,
+                                ),
+                            )
+                            FilterChip(
+                                selected = !rsiIsAbove,
+                                onClick = {
+                                    rsiIsAbove = false
+                                    // 點擊超賣時，若原本是超買的 70/80，自動帶入標準超賣 30
+                                    if (rsiThresholdText == "70" || rsiThresholdText == "80") {
+                                        rsiThresholdText = "30"
+                                    }
+                                },
+                                label = { Text("低於閾值（超賣恐慌）") },
+                                modifier = Modifier.weight(1f),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = BrandSkyContainer,
+                                    selectedLabelColor = BrandSky,
+                                ),
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            OutlinedTextField(
+                                value = rsiPeriodText,
+                                onValueChange = { rsiPeriodText = it.filter { ch -> ch.isDigit() } },
+                                label = { Text("RSI 週期") },
+                                suffix = { Text("日") },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.weight(1f),
+                            )
+                            OutlinedTextField(
+                                value = rsiThresholdText,
+                                onValueChange = { rsiThresholdText = it.filter { ch -> ch.isDigit() } },
+                                label = { Text("閾值") },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+
+                        Text(
+                            text = if (rsiIsAbove) "💡 常見出場策略：當 RSI(14) 突破 70 時，表示短線急速反彈過熱，可作為衛星部位（如 00631L）獲利了結退回防守之提醒。"
+                                   else "💡 抄底輔助：當 RSI(14) 跌破 30 或 20 時，代表極端超賣恐慌。",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = BrandSky,
+                        )
+                    }
                 }
 
                 // Planned Buy Amount
@@ -438,11 +628,22 @@ fun AddEditRuleDialog(
                             val symbol = verifiedQuote?.symbol ?: editingRule?.symbol ?: return@Button
                             val displaySym = verifiedQuote?.displaySymbol ?: editingRule?.displaySymbol ?: symbol
                             val name = verifiedQuote?.name ?: editingRule?.name ?: displaySym
-                            val condition = MovingAverageCondition(
-                                periodDays = effectivePeriod,
-                                triggerMode = triggerMode,
-                                tolerancePercent = tolerance.coerceAtLeast(0.0),
-                            )
+                            val condition: AlertCondition = when (selectedCategory) {
+                                RuleConditionCategory.MOVING_AVERAGE -> MovingAverageCondition(
+                                    periodDays = effectivePeriod,
+                                    triggerMode = triggerMode,
+                                    tolerancePercent = tolerance.coerceAtLeast(0.0),
+                                )
+                                RuleConditionCategory.PEAK_DRAWDOWN -> PeakDrawdownCondition(
+                                    lookbackDays = effectiveLookback,
+                                    drawdownPercent = selectedDrawdownPercent.toDouble(),
+                                )
+                                RuleConditionCategory.RSI -> RsiCondition(
+                                    periodDays = effectiveRsiPeriod,
+                                    threshold = effectiveRsiThreshold,
+                                    isAbove = rsiIsAbove,
+                                )
+                            }
                             onSave(
                                 editingRule?.id,
                                 symbol,
@@ -682,12 +883,17 @@ fun BuyRecordDialog(
                     (
                         listOf(
                             "手動買入",
+                            "波段高點回撤 -20%",
+                            "波段高點回撤 -25%",
+                            "波段高點回撤 -30%",
+                            "RSI>70",
                             "週線 5MA",
                             "雙週線 10MA",
                             "月線 20MA",
                             "季線 60MA",
                             "半年線 120MA",
                             "年線 240MA",
+                            "停泊資金調度",
                             "觸及目標價",
                             "技術指標訊號",
                         ) + extraTriggerSuggestions
