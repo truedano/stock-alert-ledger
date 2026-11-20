@@ -208,7 +208,7 @@ fun SimulatorScreen(
 
             // Watchlist-linked simulated stocks (Scheme A)
             if (hasWatchlistStocks) {
-                item(key = "sim_watchlist_header") {
+                item(key = "sim_watchlist_header", contentType = "header") {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -235,6 +235,7 @@ fun SimulatorScreen(
                 items(
                     items = uiState.watchlistSimulatedStocks,
                     key = { "sim_watchlist_${it.symbol}" },
+                    contentType = { "simulated_stock_card" },
                 ) { simStock ->
                     SimulatedStockControlCard(
                         stock = simStock,
@@ -251,7 +252,7 @@ fun SimulatorScreen(
 
             // Built-in offline templates (shown automatically when watchlist is empty, or toggled)
             if (!hasWatchlistStocks || showBuiltInWhenWatchlistPresent) {
-                item(key = "sim_panel_header") {
+                item(key = "sim_panel_header", contentType = "header") {
                     Text(
                         text = if (hasWatchlistStocks) {
                             "內建離線測試範本 (2 檔)"
@@ -266,6 +267,7 @@ fun SimulatorScreen(
                 items(
                     items = uiState.builtInSimulatedStocks,
                     key = { "sim_builtin_${it.symbol}" },
+                    contentType = { "simulated_stock_card" },
                 ) { simStock ->
                     SimulatedStockControlCard(
                         stock = simStock,

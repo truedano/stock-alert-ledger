@@ -5,7 +5,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -196,6 +195,7 @@ fun PortfolioScreen(
                     items(
                         items = summary.holdings,
                         key = { "holding_${it.symbol}_${it.currency.name}" },
+                        contentType = { "holding_summary_card" },
                     ) { holding ->
                         HoldingSummaryCard(holding = holding)
                     }
@@ -218,6 +218,7 @@ fun PortfolioScreen(
                     items(
                         items = records,
                         key = { "record_${it.id}" },
+                        contentType = { "buy_record_card" },
                     ) { record ->
                         BuyRecordCard(
                             record = record,
@@ -242,7 +243,7 @@ private fun DualCurrencySummaryCard(
         color = SurfaceCard,
         border = BorderStroke(1.dp, HairlineBorder),
     ) {
-        BoxWithConstraints(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(
@@ -253,65 +254,46 @@ private fun DualCurrencySummaryCard(
                         )
                     )
                 )
-                .padding(16.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            val isCompact = maxWidth < 360.dp
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.AccountBalanceWallet,
-                        contentDescription = null,
-                        tint = BrandSky,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Text(
-                        text = if (activeFilter == null) {
-                            "累計總投入資金（依幣別獨立統計）"
-                        } else {
-                            "篩選統計：$activeFilter"
-                        },
-                        style = MaterialTheme.typography.labelLarge,
-                        color = if (activeFilter == null) TextSecondary else BrandSky,
-                    )
-                }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.AccountBalanceWallet,
+                    contentDescription = null,
+                    tint = BrandSky,
+                    modifier = Modifier.size(20.dp),
+                )
+                Text(
+                    text = if (activeFilter == null) {
+                        "累計總投入資金（依幣別獨立統計）"
+                    } else {
+                        "篩選統計：$activeFilter"
+                    },
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (activeFilter == null) TextSecondary else BrandSky,
+                )
+            }
 
-                if (isCompact) {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        CurrencyTotalBox(
-                            label = "台幣總投入 (NT$)",
-                            formattedValue = Formatters.formatAmount(twdTotal, MarketCurrency.TWD),
-                            accentColor = BrandSky,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        CurrencyTotalBox(
-                            label = "美金總投入 (US$)",
-                            formattedValue = Formatters.formatAmount(usdTotal, MarketCurrency.USD),
-                            accentColor = AlertAmber,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                } else {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        CurrencyTotalBox(
-                            label = "台幣總投入 (NT$)",
-                            formattedValue = Formatters.formatAmount(twdTotal, MarketCurrency.TWD),
-                            accentColor = BrandSky,
-                            modifier = Modifier.weight(1f),
-                        )
-                        CurrencyTotalBox(
-                            label = "美金總投入 (US$)",
-                            formattedValue = Formatters.formatAmount(usdTotal, MarketCurrency.USD),
-                            accentColor = AlertAmber,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                CurrencyTotalBox(
+                    label = "台幣總投入 (NT$)",
+                    formattedValue = Formatters.formatAmount(twdTotal, MarketCurrency.TWD),
+                    accentColor = BrandSky,
+                    modifier = Modifier.weight(1f),
+                )
+                CurrencyTotalBox(
+                    label = "美金總投入 (US$)",
+                    formattedValue = Formatters.formatAmount(usdTotal, MarketCurrency.USD),
+                    accentColor = AlertAmber,
+                    modifier = Modifier.weight(1f),
+                )
             }
         }
     }
@@ -331,12 +313,12 @@ private fun CurrencyTotalBox(
         border = BorderStroke(1.dp, accentColor.copy(alpha = 0.25f)),
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.labelMedium,
                 color = TextSecondary,
             )
             Text(
