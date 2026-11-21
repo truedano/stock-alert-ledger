@@ -156,3 +156,44 @@ data class PriceTargetCondition(
         }
 }
 
+/**
+ * 複合多條件警報（例如：跌破 60MA 且 RSI < 30 超賣雙重確認）
+ * 所有子條件 (conditions) 必須同時滿足 (AND 邏輯) 才會觸發警示
+ */
+@Serializable
+@SerialName("composite")
+data class CompositeCondition(
+    val conditions: List<AlertCondition>,
+) : AlertCondition {
+    override val conditionDisplayName: String
+        get() = if (conditions.isEmpty()) "複合策略（未設定子條件）"
+        else conditions.joinToString(" 且 ") { it.conditionDisplayName }
+
+    val shortTriggerTag: String
+        get() = when {
+            conditions.isEmpty() -> "複合條件"
+            conditions.size == 1 -> when (val c = conditions.first()) {
+                is MovingAverageCondition -> c.shortTriggerTag
+                is PeakDrawdownCondition -> c.shortTriggerTag
+                is RsiCondition -> c.shortTriggerTag
+                is MarginMaintenanceCondition -> c.shortTriggerTag
+                is PriceTargetCondition -> c.shortTriggerTag
+                else -> c.conditionDisplayName
+            }
+            else -> {
+                val tags = conditions.map { c ->
+                    when (c) {
+                        is MovingAverageCondition -> c.shortTriggerTag
+                        is PeakDrawdownCondition -> c.shortTriggerTag
+                        is RsiCondition -> c.shortTriggerTag
+                        is MarginMaintenanceCondition -> c.shortTriggerTag
+                        is PriceTargetCondition -> c.shortTriggerTag
+                        else -> c.conditionDisplayName
+                    }
+                }
+                tags.joinToString(" + ")
+            }
+        }
+}
+
+

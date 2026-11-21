@@ -176,4 +176,43 @@ class StrategyConditionEvaluationTest {
         assertTrue(evalBreak.isTriggered)
         assertTrue(evalBreak.statusMessage.contains("已突破或觸及目標價"))
     }
+
+    @Test
+    fun `test composite condition triggers only when all sub-conditions are met`() {
+        val closes = List(20) { 100.0 }
+        val snapshot = MarketSnapshot(
+            symbol = "2330.TW",
+            currentPrice = 98.0,
+            historicalCloses = closes,
+        )
+
+        val maCond = MovingAverageCondition(periodDays = 20, triggerMode = MovingAverageTriggerMode.BELOW_OR_EQUAL)
+        // 單獨 MA 已滿足 (現價 98 <= 100)
+        assertTrue(ConditionEngine.evaluate(maCond, snapshot).isTriggered)
+
+        // 疊加 RSI < 30 條件 (目前價格持平，RSI 約 50，不滿足)
+        val rsiBelow30 = RsiCondition(periodDays = 14, threshold = 30.0, isAbove = false)
+        assertFalse(ConditionEngine.evaluate(rsiBelow30, snapshot).isTriggered)
+
+        val composite = CompositeCondition(conditions = listOf(maCond, rsiBelow30))
+        val evalComposite = ConditionEngine.evaluate(composite, snapshot)
+        // 因為 RSI 未滿足，複合條件應判定為 false，避免空頭摸均線接飛刀
+        assertFalse(evalComposite.isTriggered)
+        assertEquals("月線 20MA + RSI<30", evalComposite.triggerTag)
+
+        // 若換成連續下跌產生極端超賣 (RSI < 30) 的歷史
+        val dropCloses = listOf(
+            150.0, 140.0, 130.0, 120.0, 110.0, 100.0, 95.0, 90.0, 85.0, 80.0,
+            75.0, 70.0, 65.0, 60.0, 55.0, 50.0, 45.0, 40.0, 35.0, 30.0
+        )
+        val snapshotDrop = MarketSnapshot(
+            symbol = "2330.TW",
+            currentPrice = 28.0,
+            historicalCloses = dropCloses,
+        )
+
+        val evalDrop = ConditionEngine.evaluate(composite, snapshotDrop)
+        assertTrue(evalDrop.isTriggered)
+        assertTrue(evalDrop.statusMessage.contains("全部條件已同時滿足"))
+    }
 }
