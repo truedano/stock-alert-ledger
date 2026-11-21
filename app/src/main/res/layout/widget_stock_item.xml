@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_item_row"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingVertical="5dp">
+
+    <!-- Symbol & Compact Name (Left Aligned) -->
+    <TextView
+        android:id="@+id/item_symbol"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1.1"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:text="2330 台積電"
+        android:textColor="#F4F4F5"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <!-- Current Price (Center/Right) -->
+    <TextView
+        android:id="@+id/item_price"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="6dp"
+        android:text="NT$ 1,025"
+        android:textColor="#FFFFFF"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <!-- Strategy Condition Badge (Right Aligned, Highlight on triggered) -->
+    <TextView
+        android:id="@+id/item_status"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_widget_tag"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:paddingHorizontal="6dp"
+        android:paddingVertical="2dp"
+        android:text="月線 20MA"
+        android:textColor="#38BDF8"
+        android:textSize="10sp"
+        android:textStyle="bold" />
+
+</LinearLayout>

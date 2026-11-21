@@ -194,6 +194,9 @@ data class CompositeCondition(
                 tags.joinToString(" + ")
             }
         }
+
+    val compactSummary: String
+        get() = shortTriggerTag
 }
 
 
