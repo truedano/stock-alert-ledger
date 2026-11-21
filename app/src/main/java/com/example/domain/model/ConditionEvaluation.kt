@@ -452,6 +452,61 @@ class PriceTargetEvaluator : ConditionEvaluator<PriceTargetCondition> {
     }
 }
 
+class CompositeEvaluator : ConditionEvaluator<CompositeCondition> {
+    override val conditionClass: KClass<CompositeCondition> = CompositeCondition::class
+
+    override fun requiredPeriods(condition: CompositeCondition): Set<Int> {
+        return condition.conditions.flatMap { ConditionEngine.requiredPeriods(it) }.toSet()
+    }
+
+    override fun evaluate(
+        condition: CompositeCondition,
+        snapshot: MarketSnapshot,
+    ): ConditionEvaluationResult {
+        if (condition.conditions.isEmpty()) {
+            return ConditionEvaluationResult(
+                isTriggered = false,
+                targetReferenceLabel = "複合條件（空）",
+                targetReferencePrice = null,
+                distancePercent = null,
+                triggerTag = condition.shortTriggerTag,
+                statusMessage = "未設定子條件",
+                isInsufficientData = true,
+            )
+        }
+
+        val subResults = condition.conditions.map { subCond ->
+            ConditionEngine.evaluate(subCond, snapshot)
+        }
+
+        val hasInsufficient = subResults.any { it.isInsufficientData }
+        val allTriggered = subResults.isNotEmpty() && subResults.all { it.isTriggered }
+
+        val firstWithPrice = subResults.firstOrNull { it.targetReferencePrice != null }
+        val leadLabel = subResults.joinToString(" 且 ") { it.targetReferenceLabel }
+
+        val status = if (hasInsufficient) {
+            val insufficientOne = subResults.first { it.isInsufficientData }
+            "資料不足：${insufficientOne.statusMessage}"
+        } else if (allTriggered) {
+            "全部條件已同時滿足！(${subResults.joinToString("，") { it.statusMessage }})"
+        } else {
+            val unMet = subResults.filter { !it.isTriggered }
+            "未滿足：${unMet.joinToString(" / ") { it.statusMessage }}"
+        }
+
+        return ConditionEvaluationResult(
+            isTriggered = allTriggered && !hasInsufficient,
+            targetReferenceLabel = leadLabel,
+            targetReferencePrice = firstWithPrice?.targetReferencePrice,
+            distancePercent = firstWithPrice?.distancePercent,
+            triggerTag = condition.shortTriggerTag,
+            statusMessage = status,
+            isInsufficientData = hasInsufficient,
+        )
+    }
+}
+
 /**
  * Extensible Strategy Registry & Dispatcher for all AlertCondition implementations.
  * New evaluators can be registered via register(...) without modifying callers.
@@ -465,6 +520,7 @@ object ConditionEngine {
         register(RsiEvaluator())
         register(MarginMaintenanceEvaluator())
         register(PriceTargetEvaluator())
+        register(CompositeEvaluator())
     }
 
     fun <T : AlertCondition> register(evaluator: ConditionEvaluator<T>) {

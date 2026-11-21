@@ -67,6 +67,7 @@ import com.example.ui.LookupUiState
 import com.example.ui.theme.AlertAmber
 import com.example.ui.theme.BrandSky
 import com.example.ui.theme.BrandSkyContainer
+import com.example.ui.theme.CanvasObsidian
 import com.example.ui.theme.FinancialTextStyles
 import com.example.ui.theme.HairlineBorder
 import com.example.ui.theme.SurfaceCard
@@ -110,12 +111,25 @@ fun AddEditRuleDialog(
         is PeakDrawdownCondition -> RuleConditionCategory.PEAK_DRAWDOWN
         is RsiCondition -> RuleConditionCategory.RSI
         is com.example.domain.model.MarginMaintenanceCondition -> RuleConditionCategory.MARGIN
+        is com.example.domain.model.CompositeCondition -> {
+            val lead = initialCond.conditions.firstOrNull()
+            when (lead) {
+                is MovingAverageCondition -> RuleConditionCategory.MOVING_AVERAGE
+                is PeakDrawdownCondition -> RuleConditionCategory.PEAK_DRAWDOWN
+                is com.example.domain.model.PriceTargetCondition -> RuleConditionCategory.PRICE_TARGET
+                else -> RuleConditionCategory.MOVING_AVERAGE
+            }
+        }
         else -> RuleConditionCategory.PRICE_TARGET
     }
     var selectedCategory by remember(editingRule) { mutableStateOf(initialCategory) }
 
     // 目標價狀態
-    val initialPriceTarget = initialCond as? com.example.domain.model.PriceTargetCondition
+    val initialPriceTarget = when (initialCond) {
+        is com.example.domain.model.PriceTargetCondition -> initialCond
+        is com.example.domain.model.CompositeCondition -> initialCond.conditions.filterIsInstance<com.example.domain.model.PriceTargetCondition>().firstOrNull()
+        else -> null
+    }
     var targetPriceText by remember(editingRule) {
         mutableStateOf(initialPriceTarget?.targetPrice?.let {
             if (it % 1.0 == 0.0) it.toLong().toString() else it.toString()
@@ -132,7 +146,11 @@ fun AddEditRuleDialog(
     }
 
     // MA 狀態
-    val initialMa = initialCond as? MovingAverageCondition
+    val initialMa = when (initialCond) {
+        is MovingAverageCondition -> initialCond
+        is com.example.domain.model.CompositeCondition -> initialCond.conditions.filterIsInstance<MovingAverageCondition>().firstOrNull()
+        else -> null
+    }
     val presetPeriods = listOf(5, 10, 20, 60, 120, 240, 720, 1200, 2400)
     val initialPeriod = initialMa?.periodDays ?: 20
     var selectedPeriod by remember(editingRule) { mutableStateOf(initialPeriod) }
@@ -150,7 +168,11 @@ fun AddEditRuleDialog(
     }
 
     // 波段回撤抄底狀態 (預設 -20%)
-    val initialDrawdown = initialCond as? PeakDrawdownCondition
+    val initialDrawdown = when (initialCond) {
+        is PeakDrawdownCondition -> initialCond
+        is com.example.domain.model.CompositeCondition -> initialCond.conditions.filterIsInstance<PeakDrawdownCondition>().firstOrNull()
+        else -> null
+    }
     val presetDrawdowns = listOf(10, 15, 20, 25, 30)
     var selectedDrawdownPercent by remember(editingRule) {
         mutableStateOf(initialDrawdown?.drawdownPercent?.toInt() ?: 20)
@@ -184,6 +206,23 @@ fun AddEditRuleDialog(
     }
     var marginExitThresholdText by remember(editingRule) {
         mutableStateOf((initialMargin?.exitThreshold?.toInt() ?: 170).toString())
+    }
+
+    // 複合條件輔助確認 (AND 輔助確認)
+    val initialComposite = initialCond as? com.example.domain.model.CompositeCondition
+    val initialSubRsi = initialComposite?.conditions?.filterIsInstance<RsiCondition>()?.firstOrNull()
+    val initialSubMargin = initialComposite?.conditions?.filterIsInstance<com.example.domain.model.MarginMaintenanceCondition>()?.firstOrNull()
+    var enableRsiFilter by remember(editingRule) {
+        mutableStateOf(initialSubRsi != null)
+    }
+    var subRsiThresholdText by remember(editingRule) {
+        mutableStateOf((initialSubRsi?.threshold?.toInt() ?: 30).toString())
+    }
+    var enableMarginFilter by remember(editingRule) {
+        mutableStateOf(initialSubMargin != null)
+    }
+    var subMarginThresholdText by remember(editingRule) {
+        mutableStateOf((initialSubMargin?.panicThreshold?.toInt() ?: 150).toString())
     }
 
     var tickerInput by remember(editingRule) {
@@ -862,6 +901,116 @@ fun AddEditRuleDialog(
                     }
                 }
 
+                // 複合雙重確認區塊 (支援在 目標價 / 均線 / 波段回撤 上疊加輔助過濾)
+                if (selectedCategory != RuleConditionCategory.RSI && selectedCategory != RuleConditionCategory.MARGIN) {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = SurfaceCard,
+                        border = BorderStroke(1.dp, HairlineBorder),
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Text(
+                                text = "🛡️ 複合策略雙重確認 (選用)",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = BrandSky,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                text = "同時滿足以下輔助條件才發出警報，有效過濾空頭破線接飛刀的假訊號：",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary,
+                            )
+
+                            // RSI 輔助開關
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "搭配 RSI < 30 超賣過濾",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = TextPrimary,
+                                    )
+                                    Text(
+                                        text = "股價達到目標/均線時，RSI 必須低於閾值才通知",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = TextSecondary,
+                                    )
+                                }
+                                Switch(
+                                    checked = enableRsiFilter,
+                                    onCheckedChange = { enableRsiFilter = it },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = CanvasObsidian,
+                                        checkedTrackColor = BrandSky,
+                                    ),
+                                )
+                            }
+
+                            if (enableRsiFilter) {
+                                OutlinedTextField(
+                                    value = subRsiThresholdText,
+                                    onValueChange = { subRsiThresholdText = it.filter { ch -> ch.isDigit() } },
+                                    label = { Text("RSI 超賣門檻 (建議 30)") },
+                                    suffix = { Text("分以下") },
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+
+                            // 台股融資維持率輔助開關 (限台股)
+                            if (activeCurrency == MarketCurrency.TWD) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "搭配全市場融資維持率恐慌抄底",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = TextPrimary,
+                                        )
+                                        Text(
+                                            text = "全市場融資維持率跌破指定門檻且反彈時才提醒",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = TextSecondary,
+                                        )
+                                    }
+                                    Switch(
+                                        checked = enableMarginFilter,
+                                        onCheckedChange = { enableMarginFilter = it },
+                                        colors = SwitchDefaults.colors(
+                                            checkedThumbColor = CanvasObsidian,
+                                            checkedTrackColor = AlertAmber,
+                                        ),
+                                    )
+                                }
+
+                                if (enableMarginFilter) {
+                                    OutlinedTextField(
+                                        value = subMarginThresholdText,
+                                        onValueChange = { subMarginThresholdText = it.filter { ch -> ch.isDigit() } },
+                                        label = { Text("維持率恐慌線 (%)") },
+                                        suffix = { Text("% 以下") },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Planned Buy Amount
                 OutlinedTextField(
                     value = plannedAmountText,
@@ -901,7 +1050,7 @@ fun AddEditRuleDialog(
                             val symbol = verifiedQuote?.symbol ?: editingRule?.symbol ?: return@Button
                             val displaySym = verifiedQuote?.displaySymbol ?: editingRule?.displaySymbol ?: symbol
                             val name = verifiedQuote?.name ?: editingRule?.name ?: displaySym
-                            val condition: AlertCondition = when (selectedCategory) {
+                            val baseCondition: AlertCondition = when (selectedCategory) {
                                 RuleConditionCategory.PRICE_TARGET -> com.example.domain.model.PriceTargetCondition(
                                     targetPrice = effectiveTargetPrice,
                                     direction = targetDirection,
@@ -928,6 +1077,25 @@ fun AddEditRuleDialog(
                                     isExitMode = isMarginExitMode,
                                     exitThreshold = effectiveExit,
                                 )
+                            }
+
+                            val condition: AlertCondition = if (selectedCategory != RuleConditionCategory.RSI && selectedCategory != RuleConditionCategory.MARGIN) {
+                                val extras = mutableListOf<AlertCondition>()
+                                if (enableRsiFilter) {
+                                    val rsiTh = subRsiThresholdText.toDoubleOrNull() ?: 30.0
+                                    extras.add(RsiCondition(periodDays = 14, threshold = rsiTh, isAbove = false))
+                                }
+                                if (enableMarginFilter && activeCurrency == MarketCurrency.TWD) {
+                                    val marginTh = subMarginThresholdText.toDoubleOrNull() ?: 150.0
+                                    extras.add(com.example.domain.model.MarginMaintenanceCondition(panicThreshold = marginTh, reboundPoints = 20.0))
+                                }
+                                if (extras.isNotEmpty()) {
+                                    com.example.domain.model.CompositeCondition(conditions = listOf(baseCondition) + extras)
+                                } else {
+                                    baseCondition
+                                }
+                            } else {
+                                baseCondition
                             }
                             onSave(
                                 editingRule?.id,
