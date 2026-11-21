@@ -88,3 +88,22 @@ interface BuyRecordDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(records: List<BuyRecordEntity>)
 }
+
+@Dao
+interface AlertLogDao {
+    @Query("SELECT * FROM alert_logs ORDER BY triggeredTimestamp DESC, id DESC")
+    fun observeAllLogs(): Flow<List<AlertLogEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertLog(log: AlertLogEntity): Long
+
+    @Query("SELECT * FROM alert_logs ORDER BY triggeredTimestamp DESC, id DESC LIMIT :limit")
+    suspend fun getRecentLogs(limit: Int = 100): List<AlertLogEntity>
+
+    @Query("DELETE FROM alert_logs WHERE id = :id")
+    suspend fun deleteLogById(id: Long)
+
+    @Query("DELETE FROM alert_logs")
+    suspend fun clearAllLogs()
+}
+

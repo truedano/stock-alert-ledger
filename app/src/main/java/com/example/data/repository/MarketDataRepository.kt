@@ -33,10 +33,13 @@ class MarketDataRepository(
     private val fearAndGreedService: com.example.data.remote.FearAndGreedService = com.example.data.remote.FearAndGreedService(),
     private val watchlistDao: WatchlistDao,
     private val cachedQuoteDao: CachedQuoteDao,
+    private val alertLogDao: com.example.data.local.AlertLogDao? = null,
     private val preferencesRepository: AppPreferencesRepository,
 ) {
     val rulesFlow: Flow<List<WatchlistRuleEntity>> = watchlistDao.observeAllRules()
     val cachedQuotesFlow: Flow<List<CachedQuoteEntity>> = cachedQuoteDao.observeAllQuotes()
+    val alertLogsFlow: Flow<List<com.example.data.local.AlertLogEntity>> = alertLogDao?.observeAllLogs()
+        ?: kotlinx.coroutines.flow.flowOf(emptyList())
 
     private var latestMarginSnapshot: com.example.data.remote.MarketMarginSnapshot? = null
     private var stockMarginCache: Map<String, com.example.data.remote.StockMarginInfo> = emptyMap()
@@ -73,6 +76,14 @@ class MarketDataRepository(
     fun getStockMarginInfo(symbol: String): com.example.data.remote.StockMarginInfo? {
         val clean = symbol.substringBefore(".").trim().uppercase()
         return stockMarginCache[clean]
+    }
+
+    suspend fun clearAlertLogs() = withContext(Dispatchers.IO) {
+        alertLogDao?.clearAllLogs()
+    }
+
+    suspend fun deleteAlertLog(id: Long) = withContext(Dispatchers.IO) {
+        alertLogDao?.deleteLogById(id)
     }
 
     suspend fun getEnabledSymbols(): List<String> = withContext(Dispatchers.IO) {
@@ -470,6 +481,23 @@ class MarketDataRepository(
         if (rule.condition is com.example.domain.model.PriceTargetCondition && rule.condition.autoDisableOnTrigger) {
             watchlistDao.setEnabled(rule.id, false)
         }
+
+        // 記錄至警報歷史日誌
+        alertLogDao?.insertLog(
+            com.example.data.local.AlertLogEntity(
+                ruleId = rule.id,
+                symbol = rule.symbol,
+                displaySymbol = rule.displaySymbol,
+                name = rule.name,
+                currency = rule.currency,
+                triggerTag = eval.triggerTag,
+                triggeredPrice = quote.currentPrice,
+                triggeredTimestamp = now,
+                triggeredDateKey = todayKey,
+                note = eval.statusMessage,
+            )
+        )
+
         if (sendNotification) {
             StockNotificationHelper.showBuyAlertNotification(
                 context = appContext,

@@ -89,6 +89,7 @@ fun WatchlistScreen(
     onDeleteRule: (Long) -> Unit,
     onResetTrigger: (Long) -> Unit,
     onQuickBuyClick: (WatchlistItemUi) -> Unit,
+    onAlertLogClick: () -> Unit = {},
     onAboutAppClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -151,12 +152,21 @@ fun WatchlistScreen(
                                     color = TextSecondary,
                                 )
                             }
-                            IconButton(onClick = onAboutAppClick) {
-                                Icon(
-                                    imageVector = Icons.Default.Info,
-                                    contentDescription = "軟體資訊與檢查更新",
-                                    tint = BrandSky
-                                )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(onClick = onAlertLogClick) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.NotificationsActive,
+                                        contentDescription = "警報歷史紀錄",
+                                        tint = if (uiState.alertLogs.isNotEmpty()) AlertAmber else TextSecondary,
+                                    )
+                                }
+                                IconButton(onClick = onAboutAppClick) {
+                                    Icon(
+                                        imageVector = Icons.Default.Info,
+                                        contentDescription = "軟體資訊與檢查更新",
+                                        tint = BrandSky,
+                                    )
+                                }
                             }
                         }
                     }
