@@ -24,17 +24,22 @@ class YahooFinanceService(
 
     /**
      * Smart Ticker Resolution:
+     * - Recognizes common index/ETF aliases (e.g. "大盤" -> "^TWII", "標普" -> "^GSPC", etc.)
      * - Contains digits without .TW/.TWO -> try {code}.TW first; on 404/no data, fallback to {code}.TWO.
      * - Pure letters -> query directly as US stock/ETF.
      * - Explicit .TW or .TWO -> query directly.
      */
     suspend fun resolveAndFetch(rawInput: String): TickerLookupResult = withContext(Dispatchers.IO) {
-        val cleaned = rawInput.trim().uppercase(Locale.US)
-        if (cleaned.isEmpty()) {
+        val trimmed = rawInput.trim()
+        if (trimmed.isEmpty()) {
             return@withContext TickerLookupResult.NotFound("請輸入股票代號")
         }
+
+        val mappedSymbol = INDEX_ALIASES[trimmed.lowercase(Locale.ROOT)] ?: trimmed
+        val cleaned = mappedSymbol.uppercase(Locale.US)
+
         if (!SAFE_TICKER_INPUT_REGEX.matches(cleaned)) {
-            return@withContext TickerLookupResult.NotFound("股票代號格式不正確，僅支援英數字及 . -")
+            return@withContext TickerLookupResult.NotFound("股票代號格式不正確，僅支援英數字及 . - ^ =")
         }
 
         val candidates = buildCandidateSymbols(cleaned)
@@ -59,7 +64,7 @@ class YahooFinanceService(
     }
 
     internal fun buildCandidateSymbols(cleaned: String): List<String> {
-        if (cleaned.endsWith(".TW") || cleaned.endsWith(".TWO")) {
+        if (cleaned.startsWith("^") || cleaned.endsWith(".TW") || cleaned.endsWith(".TWO")) {
             return listOf(cleaned)
         }
         val containsDigit = cleaned.any { it.isDigit() }
@@ -172,6 +177,30 @@ class YahooFinanceService(
         private val SAFE_TICKER_INPUT_REGEX = Regex("^[A-Z0-9.\\-^=]{1,20}$")
         private const val BROWSER_USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+
+        private val INDEX_ALIASES = mapOf(
+            "大盤" to "^TWII",
+            "加權" to "^TWII",
+            "加權指數" to "^TWII",
+            "台股大盤" to "^TWII",
+            "櫃買" to "^TWOII",
+            "櫃買指數" to "^TWOII",
+            "otc" to "^TWOII",
+            "標普" to "^GSPC",
+            "標普500" to "^GSPC",
+            "s&p" to "^GSPC",
+            "s&p500" to "^GSPC",
+            "sp500" to "^GSPC",
+            "那指" to "^IXIC",
+            "那斯達克" to "^IXIC",
+            "nasdaq" to "^IXIC",
+            "道瓊" to "^DJI",
+            "道瓊指數" to "^DJI",
+            "費半" to "^SOX",
+            "費城半導體" to "^SOX",
+            "vix" to "^VIX",
+            "恐慌指數" to "^VIX",
+        )
 
         fun defaultOkHttpClient(): OkHttpClient = OkHttpClient.Builder()
             .connectionSpecs(listOf(ConnectionSpec.MODERN_TLS, ConnectionSpec.RESTRICTED_TLS))
