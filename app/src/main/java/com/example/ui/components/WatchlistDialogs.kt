@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -319,6 +320,43 @@ fun AddEditRuleDialog(
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text("查詢")
                             }
+                        }
+                    }
+                }
+
+                // Quick Preset Chips for Index & Major ETFs
+                if (editingRule == null) {
+                    val presets = listOf(
+                        "加權指數" to "^TWII",
+                        "櫃買指數" to "^TWOII",
+                        "0050" to "0050",
+                        "標普500" to "^GSPC",
+                        "那斯達克" to "^IXIC",
+                        "費半" to "^SOX",
+                        "道瓊" to "^DJI",
+                        "VIX恐慌" to "^VIX",
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "熱門/大盤：",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextSecondary,
+                        )
+                        presets.forEach { (label, symbol) ->
+                            AssistChip(
+                                onClick = {
+                                    tickerInput = symbol
+                                    onLookupTicker(symbol)
+                                },
+                                label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                                shape = RoundedCornerShape(8.dp),
+                            )
                         }
                     }
                 }

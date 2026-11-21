@@ -71,6 +71,8 @@ class ExampleUnitTest {
         assertEquals(listOf("00878.TW", "00878.TWO"), service.buildCandidateSymbols("00878"))
         assertEquals(listOf("6488.TWO"), service.buildCandidateSymbols("6488.TWO"))
         assertEquals(listOf("AAPL"), service.buildCandidateSymbols("AAPL"))
+        assertEquals(listOf("^TWII"), service.buildCandidateSymbols("^TWII"))
+        assertEquals(listOf("^GSPC"), service.buildCandidateSymbols("^GSPC"))
     }
 
     @Test
