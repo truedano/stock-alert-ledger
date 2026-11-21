@@ -15,7 +15,23 @@
 
 ### ✨ 核心功能
 
-1. **台美雙市場報價與全方位策略條件監控（v1.4.0+, v1.5.0+, v1.6.0+）**
+1. **桌面微型監控 Widget (AppWidget) 與即時連動（v1.7.0+）**
+   - **桌面即時盯盤小工具**：無須打開 App 即可在手機桌面隨時查看自選標的最新現價、漲跌幅、觸發警報狀態與主要監控條件。
+   - **一鍵手動與自動同步整理**：提供小工具快速更新按鈕，並與 App 內部資料庫與輪詢狀態即時雙向連動。
+
+2. **複合多條件警報 (CompositeCondition) 與進階二次確認過濾器（v1.7.0+）**
+   - **複合多條件規則 (AND 組合)**：支援多項技術指標條件同時成立時才觸發（例如：「月線 20MA 觸及」且「波段高點回撤 -15%」或「RSI < 30」超賣同時符合），大幅提高右側交易策略勝率。
+   - **進階二次確認過濾器 (Confirmation Filters)**：支援成交量爆量確認（當日成交量突破 20 日均量倍數門檻，如 1.5x / 2x）與跌破/突破確認日數（連續 N 日確認有效突破/跌破，防止假突破/假跌破騙線）。
+
+3. **警報歷史紀錄日誌與快捷過濾 (Alert History Log)（v1.7.0+）**
+   - **完整觸發歷史日誌**：記錄每一次警報觸發的詳細時間、標的代號、觸發時現價與符合的策略條件內容。
+   - **快速標的篩選晶片 (FilterChip)**：在警報歷史對話框中提供標的快捷晶片，一鍵單獨檢視特定自選股或指數的歷史觸發歷程，並支援一鍵清除過期紀錄。
+
+4. **大盤指數支援與自選常駐快捷記帳（v1.7.0+）**
+   - **大盤與重要指數監控**：支援台股加權指數 (`^TWII`)、櫃買指數 (`^TWOII`)、道瓊工業指數 (`^DJI`)、那斯達克 (`^IXIC`)、標普 500 (`^GSPC`)、費城半導體 (`^SOX`)，並於新增自選股時提供熱門大盤快捷標籤。
+   - **常駐快速買入按鈕**：自選股卡片常駐「記帳」操作捷徑，無須等待警報觸發即可隨時點擊快速記帳。
+
+5. **台美雙市場報價與全方位策略條件監控（v1.4.0+, v1.5.0+, v1.6.0+）**
    - 支援台股代號（如 `2330.TW`、`0050.TW`）與美股代號（如 `AAPL`、`NVDA`）。
    - **台美市場宏觀指標與市場氛圍看板（v1.6.0+）**：
      - **美股 CNN 恐懼與貪婪指數 (Fear & Greed Index)**：即時連線 CNN 抓取多維度市場情緒指數（0-100分），劃分「極度恐慌、恐慌、中立、貪婪、極度貪婪」狀態並提供歷史走勢圖與情緒解讀。
@@ -87,7 +103,23 @@
 
 ### ✨ Key Features
 
-1. **Dual Market & Multi-Strategy Alerting (v1.4.0+, v1.5.0+, v1.6.0+)**
+1. **AppWidget Micro-Monitor & Live Sync (v1.7.0+)**
+   - **Home Screen AppWidget**: Glance at real-time stock prices, intraday changes, alert trigger status, and key monitor rules directly on your home screen without opening the app.
+   - **Manual & Automated Sync**: Integrated widget refresh controls with instant bidirectional synchronization to local database state.
+
+2. **Composite Multi-Condition Alerts & Secondary Confirmation Filters (v1.7.0+)**
+   - **Composite Multi-Condition Rules (AND Logic)**: Triggers only when multiple conditions are met simultaneously (e.g., "20MA Touch" AND "Peak Drawdown -15%" or "RSI < 30"), boosting strategy precision for bottom-fishing.
+   - **Secondary Confirmation Filters**: Filters false breakouts and whipsaws with volume spike confirmation (e.g., 1.5x / 2.0x 20-day average volume) and persistent breakout/breakdown day counts.
+
+3. **Alert Trigger History Log & Target Filter Chips (v1.7.0+)**
+   - **Complete Trigger History**: Automatically records timestamp, symbol, market price at trigger, and satisfied rule conditions.
+   - **Quick FilterChips**: Filter history records by individual stock or index ticker with one tap; supports clearing obsolete logs.
+
+4. **Market Index Tracking & Persistent Ledger Actions (v1.7.0+)**
+   - **Major Market Benchmark Indices**: Full support for TWSE (`^TWII`), TPEx (`^TWOII`), Dow Jones (`^DJI`), Nasdaq (`^IXIC`), S&P 500 (`^GSPC`), and Philadelphia Semiconductor (`^SOX`) with quick-select chips.
+   - **Persistent Quick Buy Action**: Added permanent "Record Buy" button on stock cards for immediate bookkeeping at any time.
+
+5. **Dual Market & Multi-Strategy Alerting (v1.4.0+, v1.5.0+, v1.6.0+)**
    - Supports Taiwan stocks (`2330.TW`, `0050.TW`) and US equities (`AAPL`, `NVDA`, `TSLA`).
    - **Macro Market Sentiment Dashboard (v1.6.0+)**:
      - **US CNN Fear & Greed Index**: Real-time integration tracking sentiment (0-100), classified across Extreme Fear, Fear, Neutral, Greed, and Extreme Greed with contextual descriptions.
