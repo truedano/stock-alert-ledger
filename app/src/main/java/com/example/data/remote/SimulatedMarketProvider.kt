@@ -87,6 +87,18 @@ object SimulatedMarketProvider {
             )
         } else null
 
+        val candles = profile.closeHistory.mapIndexed { idx, c ->
+            val prev = if (idx > 0) profile.closeHistory[idx - 1] else c
+            com.example.domain.model.CandleStickData(
+                timestamp = System.currentTimeMillis() - (profile.closeHistory.size - idx) * 86400000L,
+                open = prev,
+                high = maxOf(prev, c) * 1.008,
+                low = minOf(prev, c) * 0.992,
+                close = c,
+                volume = 35000000L,
+            )
+        }
+
         return StockQuote(
             symbol = profile.symbol,
             displaySymbol = profile.displaySymbol,
@@ -98,6 +110,7 @@ object SimulatedMarketProvider {
             lastUpdatedAt = System.currentTimeMillis(),
             isSimulated = true,
             marginInfo = marginInfo,
+            candleHistory = candles,
         )
     }
 }

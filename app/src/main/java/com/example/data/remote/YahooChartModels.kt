@@ -22,6 +22,7 @@ data class YahooChartError(
 @Serializable
 data class YahooChartResult(
     val meta: YahooChartMeta? = null,
+    val timestamp: List<Long>? = null,
     val indicators: YahooIndicators? = null,
 )
 
@@ -43,5 +44,9 @@ data class YahooIndicators(
 
 @Serializable
 data class YahooQuoteSeries(
+    val open: List<Double?>? = null,
+    val high: List<Double?>? = null,
+    val low: List<Double?>? = null,
     val close: List<Double?>? = null,
+    val volume: List<Long?>? = null,
 )

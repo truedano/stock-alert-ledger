@@ -249,4 +249,52 @@ class ExampleUnitTest {
         assertEquals("月線 20MA", log.triggerTag)
         assertTrue(log.note.contains("跌破"))
     }
+
+    @Test
+    fun `parseChartJson populates candle history with valid open high low close and volume`() {
+        val service = YahooFinanceService()
+        val jsonPayload = """
+        {
+          "chart": {
+            "result": [
+              {
+                "meta": {
+                  "currency": "TWD",
+                  "symbol": "2330.TW",
+                  "regularMarketPrice": 1050.0,
+                  "chartPreviousClose": 1040.0
+                },
+                "timestamp": [1732000000, 1732086400],
+                "indicators": {
+                  "quote": [
+                    {
+                      "open": [1030.0, 1045.0],
+                      "high": [1045.0, 1060.0],
+                      "low": [1025.0, 1040.0],
+                      "close": [1040.0, 1050.0],
+                      "volume": [30000000, 35000000]
+                    }
+                  ]
+                }
+              }
+            ],
+            "error": null
+          }
+        }
+        """.trimIndent()
+
+        val result = service.parseChartJson("2330.TW", jsonPayload)
+        assertTrue(result is TickerLookupResult.Success)
+        val quote = (result as TickerLookupResult.Success).quote
+        assertEquals("2330.TW", quote.symbol)
+        assertEquals(1050.0, quote.currentPrice, 0.001)
+        assertEquals(2, quote.candleHistory.size)
+
+        val firstCandle = quote.candleHistory[0]
+        assertEquals(1030.0, firstCandle.open, 0.001)
+        assertEquals(1045.0, firstCandle.high, 0.001)
+        assertEquals(1025.0, firstCandle.low, 0.001)
+        assertEquals(1040.0, firstCandle.close, 0.001)
+        assertEquals(30000000L, firstCandle.volume)
+    }
 }

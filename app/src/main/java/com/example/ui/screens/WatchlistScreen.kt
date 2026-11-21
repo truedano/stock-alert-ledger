@@ -293,6 +293,7 @@ private fun WatchlistRuleCard(
     val quote = item.quote
     val eval = item.evaluation
     val isTriggered = rule.isTriggered
+    var isChartExpanded by remember { mutableStateOf(false) }
 
     val borderColor = when {
         isTriggered -> AlertAmber
@@ -665,6 +666,13 @@ private fun WatchlistRuleCard(
                 }
 
                 Row {
+                    IconButton(onClick = { isChartExpanded = !isChartExpanded }) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.ShowChart,
+                            contentDescription = if (isChartExpanded) "收合 K 線圖" else "展開 K 線圖",
+                            tint = if (isChartExpanded) BrandSky else TextSecondary,
+                        )
+                    }
                     IconButton(onClick = onEdit) {
                         Icon(
                             imageVector = Icons.Rounded.Edit,
@@ -680,6 +688,18 @@ private fun WatchlistRuleCard(
                         )
                     }
                 }
+            }
+
+            // 摺疊/展開 K 線圖與警報防線
+            if (isChartExpanded) {
+                com.example.ui.components.StockCandleStickChart(
+                    symbol = rule.displaySymbol,
+                    currency = rule.currency,
+                    candleHistory = quote?.candleHistory.orEmpty(),
+                    closeHistory = quote?.closeHistory.orEmpty(),
+                    ruleCondition = rule.condition,
+                    evaluation = eval,
+                )
             }
 
             // Quick-Action Bar

@@ -130,12 +130,42 @@ class YahooFinanceService(
         val meta = result.meta
             ?: return TickerLookupResult.NotFound("缺少標的資訊")
 
-        val closes = result.indicators?.quote
-            ?.firstOrNull()
+        val quoteSeries = result.indicators?.quote?.firstOrNull()
+        val closes = quoteSeries
             ?.close
             ?.filterNotNull()
             ?.filter { !it.isNaN() && !it.isInfinite() && it > 0.0 }
             .orEmpty()
+
+        val timestamps = result.timestamp.orEmpty()
+        val rawOpens = quoteSeries?.open.orEmpty()
+        val rawHighs = quoteSeries?.high.orEmpty()
+        val rawLows = quoteSeries?.low.orEmpty()
+        val rawCloses = quoteSeries?.close.orEmpty()
+        val rawVolumes = quoteSeries?.volume.orEmpty()
+
+        val candles = ArrayList<com.example.domain.model.CandleStickData>()
+        val minLen = minOf(timestamps.size, rawCloses.size)
+        for (i in 0 until minLen) {
+            val c = rawCloses.getOrNull(i)
+            if (c != null && !c.isNaN() && !c.isInfinite() && c > 0.0) {
+                val o = rawOpens.getOrNull(i)?.takeIf { !it.isNaN() && !it.isInfinite() && it > 0.0 } ?: c
+                val h = rawHighs.getOrNull(i)?.takeIf { !it.isNaN() && !it.isInfinite() && it > 0.0 } ?: maxOf(o, c)
+                val l = rawLows.getOrNull(i)?.takeIf { !it.isNaN() && !it.isInfinite() && it > 0.0 } ?: minOf(o, c)
+                val v = rawVolumes.getOrNull(i)?.takeIf { it >= 0 } ?: 0L
+                val t = timestamps.getOrNull(i) ?: 0L
+                candles.add(
+                    com.example.domain.model.CandleStickData(
+                        timestamp = t,
+                        open = o,
+                        high = maxOf(h, maxOf(o, c)),
+                        low = minOf(l, minOf(o, c)),
+                        close = c,
+                        volume = v,
+                    )
+                )
+            }
+        }
 
         val resolvedSymbol = meta.symbol?.takeIf { it.isNotBlank() } ?: requestedSymbol
         val currentPrice = meta.regularMarketPrice?.takeIf { it > 0.0 }
@@ -169,6 +199,7 @@ class YahooFinanceService(
                 closeHistory = closes,
                 lastUpdatedAt = System.currentTimeMillis(),
                 isSimulated = false,
+                candleHistory = candles,
             )
         )
     }

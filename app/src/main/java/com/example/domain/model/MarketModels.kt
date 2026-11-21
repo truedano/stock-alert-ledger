@@ -22,6 +22,7 @@ data class StockQuote(
     val lastUpdatedAt: Long,
     val isSimulated: Boolean,
     val marginInfo: com.example.data.remote.StockMarginInfo? = null,
+    val candleHistory: List<CandleStickData> = emptyList(),
 )
 
 sealed interface TickerLookupResult {
