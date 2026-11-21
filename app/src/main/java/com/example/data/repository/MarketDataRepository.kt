@@ -162,19 +162,36 @@ class MarketDataRepository(
         if (savedRule != null && cached != null && savedRule.isEnabled) {
             evaluateAndRecordTrigger(savedRule, cached.toStockQuote(), sendNotification = false)
         }
+
+        notifyWidgetDataChanged()
         ruleId
     }
 
     suspend fun toggleRuleEnabled(ruleId: Long, enabled: Boolean) = withContext(Dispatchers.IO) {
         watchlistDao.setEnabled(ruleId, enabled)
+        notifyWidgetDataChanged()
     }
 
     suspend fun resetRuleTrigger(ruleId: Long) = withContext(Dispatchers.IO) {
         watchlistDao.resetTrigger(ruleId)
+        notifyWidgetDataChanged()
     }
 
     suspend fun deleteRule(ruleId: Long) = withContext(Dispatchers.IO) {
         watchlistDao.deleteRuleById(ruleId)
+        notifyWidgetDataChanged()
+    }
+
+    private fun notifyWidgetDataChanged() {
+        try {
+            val widgetManager = android.appwidget.AppWidgetManager.getInstance(appContext)
+            val ids = widgetManager.getAppWidgetIds(
+                android.content.ComponentName(appContext, com.example.widget.StockMonitorWidgetProvider::class.java)
+            )
+            if (ids.isNotEmpty()) {
+                com.example.widget.StockMonitorWidgetProvider.updateAllWidgets(appContext, widgetManager, ids)
+            }
+        } catch (_: Exception) {}
     }
 
     suspend fun refreshAllEnabledRules(sendNotifications: Boolean): RefreshSummary =
@@ -292,6 +309,17 @@ class MarketDataRepository(
                 }
             }
             preferencesRepository.updateSyncInfo(now, summaryMessage)
+
+            // 通知桌面 Widget 更新最新報價
+            try {
+                val widgetManager = android.appwidget.AppWidgetManager.getInstance(appContext)
+                val ids = widgetManager.getAppWidgetIds(
+                    android.content.ComponentName(appContext, com.example.widget.StockMonitorWidgetProvider::class.java)
+                )
+                if (ids.isNotEmpty()) {
+                    com.example.widget.StockMonitorWidgetProvider.updateAllWidgets(appContext, widgetManager, ids)
+                }
+            } catch (_: Exception) {}
 
             RefreshSummary(
                 updatedCount = updatedCount,
