@@ -14,11 +14,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -27,6 +30,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -54,6 +61,19 @@ fun AlertLogDialog(
     onClearAll: () -> Unit,
     onDeleteLog: (Long) -> Unit,
 ) {
+    var selectedSymbolFilter by remember { mutableStateOf<String?>(null) }
+
+    // 依股票代號動態產出篩選標籤清單
+    val availableSymbols = remember(logs) {
+        logs.map { it.symbol }.distinct()
+    }
+
+    // 依選定的標籤過濾紀錄
+    val filteredLogs = remember(logs, selectedSymbolFilter) {
+        if (selectedSymbolFilter == null) logs
+        else logs.filter { it.symbol == selectedSymbolFilter }
+    }
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
@@ -87,7 +107,8 @@ fun AlertLogDialog(
                             modifier = Modifier.size(24.dp),
                         )
                         Text(
-                            text = "警報歷史紀錄 (${logs.size})",
+                            text = if (selectedSymbolFilter == null) "警報歷史紀錄 (${logs.size})"
+                            else "警報歷史 (${filteredLogs.size}/${logs.size})",
                             style = MaterialTheme.typography.titleLarge,
                             color = TextPrimary,
                         )
@@ -109,9 +130,49 @@ fun AlertLogDialog(
                     color = TextSecondary,
                 )
 
+                // 標籤篩選列（當有多檔股票時顯示 FilterChips）
+                if (availableSymbols.size > 1) {
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(vertical = 2.dp),
+                    ) {
+                        item {
+                            FilterChip(
+                                selected = selectedSymbolFilter == null,
+                                onClick = { selectedSymbolFilter = null },
+                                label = { Text("全部 (${logs.size})") },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = BrandSky.copy(alpha = 0.2f),
+                                    selectedLabelColor = BrandSky,
+                                ),
+                            )
+                        }
+                        items(availableSymbols) { symbol ->
+                            val symbolCount = logs.count { it.symbol == symbol }
+                            val display = logs.firstOrNull { it.symbol == symbol }?.let {
+                                if (it.name.isNotBlank() && it.name.any { ch -> ch.code in 0x4e00..0x9fff }) it.name
+                                else it.displaySymbol
+                            } ?: symbol
+
+                            FilterChip(
+                                selected = selectedSymbolFilter == symbol,
+                                onClick = {
+                                    selectedSymbolFilter = if (selectedSymbolFilter == symbol) null else symbol
+                                },
+                                label = { Text("$display ($symbolCount)") },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = BrandSky.copy(alpha = 0.2f),
+                                    selectedLabelColor = BrandSky,
+                                ),
+                            )
+                        }
+                    }
+                }
+
                 HorizontalDivider(color = HairlineBorder)
 
-                if (logs.isEmpty()) {
+                if (filteredLogs.isEmpty()) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -120,12 +181,13 @@ fun AlertLogDialog(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Text(
-                            text = "目前尚無歷史觸發紀錄",
+                            text = if (logs.isEmpty()) "目前尚無歷史觸發紀錄" else "無符合篩選條件的紀錄",
                             style = MaterialTheme.typography.bodyLarge,
                             color = TextSecondary,
                         )
                         Text(
-                            text = "當股價或指標達到您設定的條件時，此處將自動記錄觸發歷程",
+                            text = if (logs.isEmpty()) "當股價或指標達到您設定的條件時，此處將自動記錄觸發歷程"
+                            else "點擊「全部」可查看所有警報歷程",
                             style = MaterialTheme.typography.labelSmall,
                             color = TextSecondary,
                         )
@@ -138,7 +200,7 @@ fun AlertLogDialog(
                         contentPadding = PaddingValues(vertical = 4.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        items(logs, key = { it.id }) { log ->
+                        items(filteredLogs, key = { it.id }) { log ->
                             AlertLogItemCard(
                                 log = log,
                                 onDelete = { onDeleteLog(log.id) },
