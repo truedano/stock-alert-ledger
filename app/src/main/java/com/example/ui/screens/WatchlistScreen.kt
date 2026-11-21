@@ -672,19 +672,21 @@ private fun WatchlistRuleCard(
                 }
             }
 
-            // Triggered Quick-Action Bar
-            AnimatedVisibility(visible = isTriggered) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    HorizontalDivider(color = AlertAmber.copy(alpha = 0.25f))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
+            // Quick-Action Bar
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                HorizontalDivider(
+                    color = if (isTriggered) AlertAmber.copy(alpha = 0.25f) else HairlineBorder.copy(alpha = 0.5f)
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (isTriggered) {
                         Button(
                             onClick = onQuickBuy,
                             modifier = Modifier
                                 .weight(1f)
-                                .height(48.dp)
+                                .height(44.dp)
                                 .testTag("quick_buy_button_${rule.id}"),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = AlertAmber,
@@ -693,7 +695,7 @@ private fun WatchlistRuleCard(
                             shape = RoundedCornerShape(12.dp),
                         ) {
                             Text(
-                                text = "立即記錄買入",
+                                text = "🔥 立即記錄買入",
                                 style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.Bold,
                             )
@@ -701,7 +703,7 @@ private fun WatchlistRuleCard(
                         OutlinedButton(
                             onClick = onResetTrigger,
                             modifier = Modifier
-                                .height(48.dp)
+                                .height(44.dp)
                                 .testTag("reset_trigger_button_${rule.id}"),
                             border = BorderStroke(1.dp, HairlineBorder),
                             shape = RoundedCornerShape(12.dp),
@@ -713,6 +715,23 @@ private fun WatchlistRuleCard(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("重置提醒")
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = onQuickBuy,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(40.dp)
+                                .testTag("quick_buy_button_${rule.id}"),
+                            border = BorderStroke(1.dp, HairlineBorder),
+                            shape = RoundedCornerShape(10.dp),
+                        ) {
+                            Text(
+                                text = "記錄買入",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = TextPrimary,
+                                fontWeight = FontWeight.Medium,
+                            )
                         }
                     }
                 }
