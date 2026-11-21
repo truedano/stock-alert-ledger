@@ -227,4 +227,26 @@ class ExampleUnitTest {
         val tagCounts = PortfolioRepository.buildTriggerTagCounts(records)
         assertEquals(2, tagCounts.size)
     }
+
+    @Test
+    fun `alert log entity correctly records trigger details and formatting`() {
+        val log = com.example.data.local.AlertLogEntity(
+            id = 1L,
+            ruleId = 10L,
+            symbol = "2330.TW",
+            displaySymbol = "2330",
+            name = "台積電",
+            currency = MarketCurrency.TWD,
+            triggerTag = "月線 20MA",
+            triggeredPrice = 980.0,
+            triggeredTimestamp = 1732156800000L,
+            triggeredDateKey = "2026-11-21",
+            note = "跌破 20MA (990.0)",
+        )
+
+        assertEquals("2330", log.displaySymbol)
+        assertEquals(980.0, log.triggeredPrice, 0.001)
+        assertEquals("月線 20MA", log.triggerTag)
+        assertTrue(log.note.contains("跌破"))
+    }
 }

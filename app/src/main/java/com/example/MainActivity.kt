@@ -205,6 +205,7 @@ fun StockAssistantRoot(
 
     // Dialog states
     var showAboutDialog by remember { mutableStateOf(false) }
+    var showAlertLogDialog by remember { mutableStateOf(false) }
     var showAddEditRuleDialog by remember { mutableStateOf(false) }
     var editingRule by remember { mutableStateOf<WatchlistRuleEntity?>(null) }
 
@@ -370,6 +371,7 @@ fun StockAssistantRoot(
                             onDeleteRule = viewModel::deleteRule,
                             onResetTrigger = viewModel::resetRuleTrigger,
                             onQuickBuyClick = viewModel::openQuickBuyFromRule,
+                            onAlertLogClick = { showAlertLogDialog = true },
                             onAboutAppClick = { showAboutDialog = true },
                         )
                     }
@@ -410,6 +412,16 @@ fun StockAssistantRoot(
     }
 
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+
+    // Alert Log Dialog
+    if (showAlertLogDialog) {
+        com.example.ui.components.AlertLogDialog(
+            logs = watchlistState.alertLogs,
+            onDismiss = { showAlertLogDialog = false },
+            onClearAll = viewModel::clearAlertLogs,
+            onDeleteLog = viewModel::deleteAlertLog,
+        )
+    }
 
     // About App & Check Update Dialog
     if (showAboutDialog) {

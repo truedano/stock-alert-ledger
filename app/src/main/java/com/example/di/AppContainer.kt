@@ -40,6 +40,7 @@ class AppContainer(context: Context) {
             fearAndGreedService = fearAndGreedService,
             watchlistDao = database.watchlistDao(),
             cachedQuoteDao = database.cachedQuoteDao(),
+            alertLogDao = database.alertLogDao(),
             preferencesRepository = preferencesRepository,
         )
     }

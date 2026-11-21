@@ -87,6 +87,7 @@ data class WatchlistUiState(
     val marketCallAccNum: Long? = null,
     val marketExeAccNum: Long? = null,
     val fearAndGreed: com.example.domain.model.FearAndGreedData? = null,
+    val alertLogs: List<com.example.data.local.AlertLogEntity> = emptyList(),
 )
 
 data class PortfolioUiState(
@@ -168,9 +169,11 @@ class StockMonitorViewModel(
         _hasRateLimitWarning,
     ) { rules, cachedQuotes, prefs, refreshing, rateWarning ->
         WatchlistCombineState(rules, cachedQuotes, prefs, refreshing, rateWarning)
-    }.combine(_marginSnapshotFlow) { state, marginSnap ->
-        state to marginSnap
-    }.combine(_fearAndGreedFlow) { (state, marginSnap), fngData ->
+    }.combine(marketRepo.alertLogsFlow) { state, alertLogs ->
+        state to alertLogs
+    }.combine(_marginSnapshotFlow) { (state, alertLogs), marginSnap ->
+        Triple(state, alertLogs, marginSnap)
+    }.combine(_fearAndGreedFlow) { (state, alertLogs, marginSnap), fngData ->
         val (rules, cachedQuotes, prefs, refreshing, rateWarning) = state
         val quoteMap = cachedQuotes.associate { it.symbol to marketRepo.attachMarginInfo(it.toStockQuote()) }
         val items = rules.map { rule ->
@@ -291,6 +294,7 @@ class StockMonitorViewModel(
             marketCallAccNum = marginSnap?.callAccNum,
             marketExeAccNum = marginSnap?.exeAccNum,
             fearAndGreed = fngData,
+            alertLogs = alertLogs,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -394,6 +398,20 @@ class StockMonitorViewModel(
             LookupUiState.Verified(prefillQuote)
         } else {
             LookupUiState.Idle
+        }
+    }
+
+    fun clearAlertLogs() {
+        viewModelScope.launch {
+            marketRepo.clearAlertLogs()
+            _snackbarMessage.value = "已清空所有警報歷史紀錄"
+        }
+    }
+
+    fun deleteAlertLog(id: Long) {
+        viewModelScope.launch {
+            marketRepo.deleteAlertLog(id)
+            _snackbarMessage.value = "已刪除該筆歷史紀錄"
         }
     }
 
