@@ -87,6 +87,7 @@ data class WatchlistUiState(
     val marketCallAccNum: Long? = null,
     val marketExeAccNum: Long? = null,
     val fearAndGreed: com.example.domain.model.FearAndGreedData? = null,
+    val futuresChip: com.example.domain.model.TaiwanFuturesChipSnapshot? = null,
     val alertLogs: List<com.example.data.local.AlertLogEntity> = emptyList(),
 )
 
@@ -140,6 +141,7 @@ class StockMonitorViewModel(
 
     private val _marginSnapshotFlow = MutableStateFlow<com.example.data.remote.MarketMarginSnapshot?>(null)
     private val _fearAndGreedFlow = MutableStateFlow<com.example.domain.model.FearAndGreedData?>(null)
+    private val _futuresChipFlow = MutableStateFlow<com.example.domain.model.TaiwanFuturesChipSnapshot?>(null)
 
     init {
         // 進入 App 時背景非同步抓取全市場維持率與恐懼貪婪指數
@@ -158,6 +160,8 @@ class StockMonitorViewModel(
                 if (needsMargin) {
                     val snap = marketRepo.fetchTwseMarginSnapshot()
                     _marginSnapshotFlow.value = snap
+                    val futures = marketRepo.fetchTaifexFuturesSnapshot()
+                    _futuresChipFlow.value = futures
                 }
             } catch (_: Exception) {
             }
@@ -177,6 +181,9 @@ class StockMonitorViewModel(
     }.combine(_marginSnapshotFlow) { (state, alertLogs), marginSnap ->
         Triple(state, alertLogs, marginSnap)
     }.combine(_fearAndGreedFlow) { (state, alertLogs, marginSnap), fngData ->
+        Pair(Triple(state, alertLogs, marginSnap), fngData)
+    }.combine(_futuresChipFlow) { (triple, fngData), futuresChip ->
+        val (state, alertLogs, marginSnap) = triple
         val (rules, cachedQuotes, prefs, refreshing, rateWarning) = state
         val quoteMap = cachedQuotes.associate { it.symbol to marketRepo.attachMarginInfo(it.toStockQuote()) }
         val items = rules.map { rule ->
@@ -297,6 +304,7 @@ class StockMonitorViewModel(
             marketCallAccNum = marginSnap?.callAccNum,
             marketExeAccNum = marginSnap?.exeAccNum,
             fearAndGreed = fngData,
+            futuresChip = futuresChip,
             alertLogs = alertLogs,
         )
     }.stateIn(
@@ -365,6 +373,10 @@ class StockMonitorViewModel(
                     val snap = marketRepo.fetchTwseMarginSnapshot()
                     if (snap != null) {
                         _marginSnapshotFlow.value = snap
+                    }
+                    val futures = marketRepo.fetchTaifexFuturesSnapshot()
+                    if (futures != null) {
+                        _futuresChipFlow.value = futures
                     }
                 }
                 val summary = marketRepo.refreshAllEnabledRules(sendNotifications = sendNotifications)

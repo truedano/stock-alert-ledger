@@ -19,6 +19,7 @@ import com.example.domain.model.MovingAverageCondition
 import com.example.domain.model.MovingAverageTriggerMode
 import com.example.domain.model.RefreshSummary
 import com.example.domain.model.StockQuote
+import com.example.domain.model.TaiwanFuturesChipSnapshot
 import com.example.domain.model.TickerLookupResult
 import com.example.domain.model.TickerSearchCandidate
 import com.example.notification.StockNotificationHelper
@@ -33,6 +34,7 @@ class MarketDataRepository(
     private val twseMarginService: com.example.data.remote.TwseMarginService = com.example.data.remote.TwseMarginService(),
     private val fearAndGreedService: com.example.data.remote.FearAndGreedService = com.example.data.remote.FearAndGreedService(),
     private val tickerSearchService: com.example.data.remote.TickerSearchService? = null,
+    private val taifexFuturesService: com.example.data.remote.TaifexFuturesService = com.example.data.remote.TaifexFuturesService(),
     private val watchlistDao: WatchlistDao,
     private val cachedQuoteDao: CachedQuoteDao,
     private val alertLogDao: com.example.data.local.AlertLogDao? = null,
@@ -46,6 +48,7 @@ class MarketDataRepository(
     private var latestMarginSnapshot: com.example.data.remote.MarketMarginSnapshot? = null
     private var stockMarginCache: Map<String, com.example.data.remote.StockMarginInfo> = emptyMap()
     private var latestFearAndGreed: com.example.domain.model.FearAndGreedData? = null
+    private var latestFuturesChipSnapshot: TaiwanFuturesChipSnapshot? = null
 
     suspend fun fetchFearAndGreed(forceRefresh: Boolean = false): com.example.domain.model.FearAndGreedData? = withContext(Dispatchers.IO) {
         val data = fearAndGreedService.fetchFearAndGreed(forceRefresh)
@@ -66,6 +69,16 @@ class MarketDataRepository(
     }
 
     fun getLatestMarginSnapshot(): com.example.data.remote.MarketMarginSnapshot? = latestMarginSnapshot
+
+    suspend fun fetchTaifexFuturesSnapshot(): TaiwanFuturesChipSnapshot? = withContext(Dispatchers.IO) {
+        val snap = taifexFuturesService.fetchFuturesChipSnapshot()
+        if (snap != null) {
+            latestFuturesChipSnapshot = snap
+        }
+        snap ?: latestFuturesChipSnapshot
+    }
+
+    fun getLatestFuturesChipSnapshot(): TaiwanFuturesChipSnapshot? = latestFuturesChipSnapshot
 
     suspend fun fetchAllStockMargins(): Map<String, com.example.data.remote.StockMarginInfo> = withContext(Dispatchers.IO) {
         val margins = twseMarginService.fetchAllStockMargins()
