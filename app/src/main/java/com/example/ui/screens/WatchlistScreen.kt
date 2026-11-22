@@ -3,6 +3,7 @@ package com.example.ui.screens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ShowChart
@@ -31,6 +33,8 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -60,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import com.example.data.local.WatchlistRuleEntity
 import com.example.domain.model.Formatters
 import com.example.domain.model.MarketCurrency
+import com.example.domain.model.isMarketIndexSymbol
 import com.example.ui.WatchlistItemUi
 import com.example.ui.WatchlistUiState
 import com.example.ui.components.MarketBadge
@@ -81,6 +86,33 @@ import com.example.ui.theme.TaiwanRedContainer
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
+
+enum class WatchlistFilter(val label: String) {
+    ALL("全部"),
+    TRIGGERED("已觸發"),
+    INDEX("大盤指數"),
+    TAIWAN("台股"),
+    US("美股"),
+    PAUSED("已暫停"),
+}
+
+internal fun filterWatchlistItems(
+    items: List<WatchlistItemUi>,
+    filter: WatchlistFilter,
+): List<WatchlistItemUi> {
+    return when (filter) {
+        WatchlistFilter.ALL -> items
+        WatchlistFilter.TRIGGERED -> items.filter { it.rule.isTriggered }
+        WatchlistFilter.INDEX -> items.filter { isMarketIndexSymbol(it.rule.symbol) }
+        WatchlistFilter.TAIWAN -> items.filter {
+            !isMarketIndexSymbol(it.rule.symbol) && it.rule.currency == MarketCurrency.TWD
+        }
+        WatchlistFilter.US -> items.filter {
+            !isMarketIndexSymbol(it.rule.symbol) && it.rule.currency == MarketCurrency.USD
+        }
+        WatchlistFilter.PAUSED -> items.filter { !it.rule.isEnabled }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -131,10 +163,25 @@ fun WatchlistScreen(
                 contentAlignment = Alignment.TopCenter,
             ) {
                 val listState = rememberLazyListState()
-                val headerCount = if (!hasNotificationPermission) 3 else 2
+                var selectedFilter by remember { mutableStateOf(WatchlistFilter.ALL) }
+                val filteredItems = remember(uiState.items, selectedFilter) {
+                    filterWatchlistItems(uiState.items, selectedFilter)
+                }
+                val showFilterBar = uiState.items.isNotEmpty()
+                val headerCount = (if (!hasNotificationPermission) 3 else 2) + (if (showFilterBar) 1 else 0)
+
+                // Reset filter back to ALL if current filter becomes empty (except ALL)
+                LaunchedEffect(uiState.items, selectedFilter) {
+                    if (selectedFilter != WatchlistFilter.ALL && filteredItems.isEmpty() && uiState.items.isNotEmpty()) {
+                        selectedFilter = WatchlistFilter.ALL
+                    }
+                }
 
                 LaunchedEffect(highlightedRuleId, uiState.items, hasNotificationPermission) {
                     val targetId = highlightedRuleId ?: return@LaunchedEffect
+                    if (selectedFilter != WatchlistFilter.ALL) {
+                        selectedFilter = WatchlistFilter.ALL
+                    }
                     val idx = uiState.items.indexOfFirst { it.rule.id == targetId }
                     if (idx >= 0) {
                         listState.animateScrollToItem(headerCount + idx)
@@ -216,13 +263,23 @@ fun WatchlistScreen(
                         )
                     }
 
+                    if (showFilterBar) {
+                        item(key = "filter_chips") {
+                            WatchlistFilterBar(
+                                allItems = uiState.items,
+                                selectedFilter = selectedFilter,
+                                onSelectFilter = { selectedFilter = it },
+                            )
+                        }
+                    }
+
                     if (uiState.items.isEmpty()) {
                         item(key = "empty_watchlist") {
                             EmptyWatchlistCard(onAddClick = onAddClick)
                         }
                     } else {
                         items(
-                            items = uiState.items,
+                            items = filteredItems,
                             key = { it.rule.id },
                             contentType = { "watchlist_rule_card" },
                         ) { item ->
@@ -299,6 +356,45 @@ private fun EmptyWatchlistCard(
                 Spacer(modifier = Modifier.width(6.dp))
                 Text("新增第一檔監控")
             }
+        }
+    }
+}
+
+@Composable
+private fun WatchlistFilterBar(
+    allItems: List<WatchlistItemUi>,
+    selectedFilter: WatchlistFilter,
+    onSelectFilter: (WatchlistFilter) -> Unit,
+) {
+    val availableFilters = remember(allItems) {
+        WatchlistFilter.entries.mapNotNull { filter ->
+            val count = filterWatchlistItems(allItems, filter).size
+            if (filter == WatchlistFilter.ALL || count > 0) {
+                filter to count
+            } else {
+                null
+            }
+        }
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        availableFilters.forEach { (filter, count) ->
+            val isSelected = selectedFilter == filter
+            FilterChip(
+                selected = isSelected,
+                onClick = { onSelectFilter(filter) },
+                label = { Text("${filter.label} ($count)") },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = if (filter == WatchlistFilter.TRIGGERED) AlertAmberContainer else BrandSkyContainer,
+                    selectedLabelColor = if (filter == WatchlistFilter.TRIGGERED) AlertAmber else BrandSky,
+                ),
+            )
         }
     }
 }
