@@ -66,6 +66,7 @@ import com.example.ui.components.AboutAppDialog
 import com.example.ui.components.AddEditRuleDialog
 import com.example.ui.components.AppUpdateDialog
 import com.example.ui.components.BuyRecordDialog
+import com.example.ui.screens.AlertLogScreen
 import com.example.ui.screens.PortfolioScreen
 import com.example.ui.screens.SimulatorScreen
 import com.example.ui.screens.WatchlistScreen
@@ -93,6 +94,9 @@ data object PortfolioRoute
 
 @Serializable
 data object SimulatorRoute
+
+@Serializable
+data object AlertLogRoute
 
 private data class TopLevelTab<T : Any>(
     val route: T,
@@ -249,7 +253,6 @@ fun StockAssistantRoot(
 
     // Dialog states
     var showAboutDialog by remember { mutableStateOf(false) }
-    var showAlertLogDialog by remember { mutableStateOf(false) }
     var showAddEditRuleDialog by remember { mutableStateOf(false) }
     var editingRule by remember { mutableStateOf<WatchlistRuleEntity?>(null) }
 
@@ -302,6 +305,7 @@ fun StockAssistantRoot(
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
+    val isTopLevelRoute = currentDestination?.hasRoute(AlertLogRoute::class) != true
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val useNavigationRail = maxWidth >= 600.dp
@@ -311,7 +315,7 @@ fun StockAssistantRoot(
             containerColor = CanvasObsidian,
             snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
             bottomBar = {
-                if (!useNavigationRail) {
+                if (!useNavigationRail && isTopLevelRoute) {
                     NavigationBar(
                         containerColor = SurfaceElevated,
                         contentColor = BrandSky,
@@ -357,7 +361,7 @@ fun StockAssistantRoot(
                     .fillMaxSize()
                     .padding(innerPadding),
             ) {
-                if (useNavigationRail) {
+                if (useNavigationRail && isTopLevelRoute) {
                     NavigationRail(
                         containerColor = SurfaceElevated,
                         contentColor = BrandSky,
@@ -417,7 +421,7 @@ fun StockAssistantRoot(
                             onDeleteRule = viewModel::deleteRule,
                             onResetTrigger = viewModel::resetRuleTrigger,
                             onQuickBuyClick = viewModel::openQuickBuyFromRule,
-                            onAlertLogClick = { showAlertLogDialog = true },
+                            onAlertLogClick = { navController.navigate(AlertLogRoute) },
                             onAboutAppClick = { showAboutDialog = true },
                         )
                     }
@@ -451,6 +455,15 @@ fun StockAssistantRoot(
                             onSendTestNotification = viewModel::sendTestNotification,
                         )
                     }
+
+                    composable<AlertLogRoute> {
+                        AlertLogScreen(
+                            logs = watchlistState.alertLogs,
+                            onBack = { navController.popBackStack() },
+                            onClearAll = viewModel::clearAlertLogs,
+                            onDeleteLog = viewModel::deleteAlertLog,
+                        )
+                    }
                     }
                 }
             }
@@ -458,16 +471,6 @@ fun StockAssistantRoot(
     }
 
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
-
-    // Alert Log Dialog
-    if (showAlertLogDialog) {
-        com.example.ui.components.AlertLogDialog(
-            logs = watchlistState.alertLogs,
-            onDismiss = { showAlertLogDialog = false },
-            onClearAll = viewModel::clearAlertLogs,
-            onDeleteLog = viewModel::deleteAlertLog,
-        )
-    }
 
     // About App & Check Update Dialog
     if (showAboutDialog) {
