@@ -45,10 +45,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -1149,6 +1152,8 @@ fun BuyRecordDialog(
     val isManualNew = prefill == null && editingRecord == null
     val isIndexSignal = prefill != null && editingRecord == null && isMarketIndexSymbol(prefill.symbol)
     val scope = rememberCoroutineScope()
+    val symbolFocusRequester = remember { FocusRequester() }
+    var isCustomTargetMode by remember(prefill, editingRecord) { mutableStateOf(false) }
 
     var buyDate by remember(prefill, editingRecord) {
         mutableStateOf(
@@ -1213,6 +1218,7 @@ fun BuyRecordDialog(
 
     val applyProxyTarget: (String, String?, MarketCurrency?) -> Unit = { rawSymbol, fallbackName, fallbackCurrency ->
         val cleaned = rawSymbol.trim().uppercase()
+        isCustomTargetMode = false
         symbolInput = cleaned
         resolvedTargetSymbol = cleaned
         if (!fallbackName.isNullOrBlank()) nameInput = fallbackName
@@ -1307,6 +1313,8 @@ fun BuyRecordDialog(
                                     },
                                     style = MaterialTheme.typography.titleMedium,
                                     color = TextPrimary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                                 Text(
                                     text = "觸發標籤：${prefill.triggerTag}",
@@ -1314,9 +1322,9 @@ fun BuyRecordDialog(
                                     color = AlertAmber,
                                 )
                                 if (isIndexSignal) {
-                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = "大盤指數無法直接買賣，請選擇下方對應 ETF 或輸入實際買入標的。",
+                                        text = "指數不可直接交易，請點選或自行輸入買入標的",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = TextSecondary,
                                     )
@@ -1328,7 +1336,7 @@ fun BuyRecordDialog(
                     }
                 }
 
-                if (isIndexSignal && prefill != null) {
+                if (isIndexSignal) {
                     val proxyOptions = remember(prefill.symbol, watchlistProxyTargets) {
                         (recommendedProxyTargetsForIndex(prefill.symbol) + watchlistProxyTargets)
                             .filter { !isMarketIndexSymbol(it.symbol) }
@@ -1344,7 +1352,8 @@ fun BuyRecordDialog(
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         proxyOptions.forEach { target ->
-                            val isSelected = symbolInput.trim().equals(target.symbol, ignoreCase = true)
+                            val isSelected = !isCustomTargetMode &&
+                                symbolInput.trim().equals(target.symbol, ignoreCase = true)
                             FilterChip(
                                 selected = isSelected,
                                 onClick = {
@@ -1357,17 +1366,30 @@ fun BuyRecordDialog(
                                 ),
                             )
                         }
+                        val isCustomSelected = isCustomTargetMode || (
+                            symbolInput.isNotBlank() &&
+                                proxyOptions.none { it.symbol.equals(symbolInput.trim(), ignoreCase = true) }
+                            )
+                        FilterChip(
+                            selected = isCustomSelected,
+                            onClick = {
+                                isCustomTargetMode = true
+                                symbolInput = ""
+                                nameInput = ""
+                                resolvedTargetSymbol = null
+                                unitPriceText = ""
+                                sharesText = ""
+                                targetLookupHint = null
+                                symbolFocusRequester.requestFocus()
+                            },
+                            label = { Text("自訂標的") },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = BrandSkyContainer,
+                                selectedLabelColor = BrandSky,
+                            ),
+                        )
                     }
                 }
-
-                OutlinedTextField(
-                    value = buyDate,
-                    onValueChange = { buyDate = it },
-                    label = { Text("買入日期 (YYYY/MM/DD)") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
-                    modifier = Modifier.fillMaxWidth(),
-                )
 
                 if (isManualNew || editingRecord != null || isIndexSignal) {
                     Row(
@@ -1387,19 +1409,21 @@ fun BuyRecordDialog(
                                 }
                             },
                             label = { Text("買入代號") },
-                            placeholder = { Text("0050.TW / 00631L.TW") },
+                            placeholder = { Text("例如 2330 / 00878") },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(
                                 capitalization = KeyboardCapitalization.Characters,
                                 keyboardType = KeyboardType.Ascii,
                             ),
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier
+                                .weight(1f)
+                                .focusRequester(symbolFocusRequester),
                         )
                         OutlinedTextField(
                             value = nameInput,
                             onValueChange = { nameInput = it },
                             label = { Text("標的名稱") },
-                            placeholder = { Text("元大台灣50") },
+                            placeholder = { Text("台積電 / 可自動帶入") },
                             singleLine = true,
                             modifier = Modifier.weight(1f),
                         )
@@ -1412,7 +1436,7 @@ fun BuyRecordDialog(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                text = targetLookupHint ?: "輸入任意代號後可點擊右側帶入最新市價",
+                                text = targetLookupHint ?: "輸入任意代號後點右側即可帶入現價與名稱",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = if (targetLookupHint?.startsWith("已帶入") == true) BrandSky else TextSecondary,
                                 modifier = Modifier.weight(1f),
@@ -1452,6 +1476,15 @@ fun BuyRecordDialog(
                         )
                     }
                 }
+
+                OutlinedTextField(
+                    value = buyDate,
+                    onValueChange = { buyDate = it },
+                    label = { Text("買入日期 (YYYY/MM/DD)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
+                    modifier = Modifier.fillMaxWidth(),
+                )
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),

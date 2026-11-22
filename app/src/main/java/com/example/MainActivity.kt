@@ -524,12 +524,15 @@ fun StockAssistantRoot(
         (fromRules + fromRecords).distinct()
     }
 
-    val watchlistProxyTargets = remember(watchlistState.items) {
-        watchlistState.items
+    val watchlistProxyTargets = remember(watchlistState.items, portfolioUiState.filteredRecords) {
+        val fromWatchlist = watchlistState.items
             .map { it.rule }
+            .map { ProxyBuyTarget(symbol = it.symbol, name = it.name, currency = it.currency) }
+        val fromPortfolio = portfolioUiState.filteredRecords
+            .map { ProxyBuyTarget(symbol = it.symbol, name = it.name, currency = it.currency) }
+        (fromWatchlist + fromPortfolio)
             .filter { !isMarketIndexSymbol(it.symbol) }
             .distinctBy { it.symbol.uppercase() }
-            .map { ProxyBuyTarget(symbol = it.symbol, name = it.name, currency = it.currency) }
     }
 
     // Quick-Buy Confirmation Dialog (from Notification PendingIntent or Watchlist Card)
