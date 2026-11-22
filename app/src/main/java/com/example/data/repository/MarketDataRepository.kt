@@ -20,6 +20,7 @@ import com.example.domain.model.MovingAverageTriggerMode
 import com.example.domain.model.RefreshSummary
 import com.example.domain.model.StockQuote
 import com.example.domain.model.TickerLookupResult
+import com.example.domain.model.TickerSearchCandidate
 import com.example.notification.StockNotificationHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -31,6 +32,7 @@ class MarketDataRepository(
     private val yahooFinanceService: YahooFinanceService,
     private val twseMarginService: com.example.data.remote.TwseMarginService = com.example.data.remote.TwseMarginService(),
     private val fearAndGreedService: com.example.data.remote.FearAndGreedService = com.example.data.remote.FearAndGreedService(),
+    private val tickerSearchService: com.example.data.remote.TickerSearchService? = null,
     private val watchlistDao: WatchlistDao,
     private val cachedQuoteDao: CachedQuoteDao,
     private val alertLogDao: com.example.data.local.AlertLogDao? = null,
@@ -96,6 +98,10 @@ class MarketDataRepository(
 
     suspend fun getPreferencesSnapshot() = withContext(Dispatchers.IO) {
         preferencesRepository.getSnapshot()
+    }
+
+    suspend fun searchTickers(query: String): List<TickerSearchCandidate> = withContext(Dispatchers.IO) {
+        tickerSearchService?.search(query) ?: emptyList()
     }
 
     suspend fun lookupTicker(rawInput: String): TickerLookupResult = withContext(Dispatchers.IO) {

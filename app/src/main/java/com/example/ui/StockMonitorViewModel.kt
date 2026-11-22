@@ -600,6 +600,10 @@ class StockMonitorViewModel(
         return marketRepo.lookupTicker(cleaned)
     }
 
+    suspend fun searchTickerCandidates(query: String): List<com.example.domain.model.TickerSearchCandidate> {
+        return marketRepo.searchTickers(query)
+    }
+
     fun dismissQuickBuyDialog() {
         _quickBuyDialogPrefill.value = null
     }

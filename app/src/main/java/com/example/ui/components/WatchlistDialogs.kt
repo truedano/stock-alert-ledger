@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -68,9 +69,11 @@ import com.example.domain.model.ProxyBuyTarget
 import com.example.domain.model.RsiCondition
 import com.example.domain.model.StockQuote
 import com.example.domain.model.TickerLookupResult
+import com.example.domain.model.TickerSearchCandidate
 import com.example.domain.model.isMarketIndexSymbol
 import com.example.domain.model.recommendedProxyTargetsForIndex
 import com.example.notification.QuickBuyPrefill
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.example.ui.LookupUiState
 import com.example.ui.theme.AlertAmber
@@ -102,6 +105,7 @@ fun AddEditRuleDialog(
     editingRule: WatchlistRuleEntity?,
     lookupState: LookupUiState,
     onLookupTicker: (String) -> Unit,
+    onSearchTickers: (suspend (String) -> List<TickerSearchCandidate>)? = null,
     onDismiss: () -> Unit,
     onSave: (
         existingId: Long?,
@@ -237,6 +241,30 @@ fun AddEditRuleDialog(
     var tickerInput by remember(editingRule) {
         mutableStateOf(editingRule?.displaySymbol ?: "")
     }
+    var searchCandidates by remember { mutableStateOf<List<TickerSearchCandidate>>(emptyList()) }
+    var isSearchingCandidates by remember { mutableStateOf(false) }
+    var suppressNextRuleSearch by remember { mutableStateOf(false) }
+
+    LaunchedEffect(tickerInput, editingRule) {
+        if (editingRule != null || onSearchTickers == null) {
+            searchCandidates = emptyList()
+            return@LaunchedEffect
+        }
+        if (suppressNextRuleSearch) {
+            suppressNextRuleSearch = false
+            return@LaunchedEffect
+        }
+        val query = tickerInput.trim()
+        if (query.isEmpty()) {
+            searchCandidates = emptyList()
+            isSearchingCandidates = false
+            return@LaunchedEffect
+        }
+        isSearchingCandidates = true
+        delay(300)
+        searchCandidates = runCatching { onSearchTickers(query) }.getOrDefault(emptyList())
+        isSearchingCandidates = false
+    }
     var plannedAmountText by remember(editingRule) {
         mutableStateOf(
             editingRule?.plannedBuyAmount?.let {
@@ -329,16 +357,16 @@ fun AddEditRuleDialog(
                     OutlinedTextField(
                         value = tickerInput,
                         onValueChange = { tickerInput = it },
-                        label = { Text("股票代號 (如 2330 或 AAPL)") },
-                        placeholder = { Text("支援台股/美股自動辨識") },
+                        label = { Text("股票代號或名稱 (如 台積電、正2、AAPL)") },
+                        placeholder = { Text("輸入中文名稱、英文或數字代號") },
                         supportingText = if (editingRule == null) {
-                            { Text("台股數字代號自動辨識上市櫃；美股直接輸入代號", style = MaterialTheme.typography.labelSmall) }
+                            { Text("支援台美股代號、中文股名（如台積電、正2）與英文名稱即時搜尋", style = MaterialTheme.typography.labelSmall) }
                         } else null,
                         singleLine = true,
                         enabled = editingRule == null,
                         keyboardOptions = KeyboardOptions(
-                            capitalization = KeyboardCapitalization.Characters,
-                            keyboardType = KeyboardType.Ascii,
+                            capitalization = KeyboardCapitalization.None,
+                            keyboardType = KeyboardType.Text,
                         ),
                         modifier = Modifier
                             .weight(1f)
@@ -346,7 +374,10 @@ fun AddEditRuleDialog(
                     )
                     if (editingRule == null) {
                         Button(
-                            onClick = { onLookupTicker(tickerInput) },
+                            onClick = {
+                                searchCandidates = emptyList()
+                                onLookupTicker(tickerInput)
+                            },
                             enabled = tickerInput.isNotBlank() && lookupState !is LookupUiState.Loading,
                             modifier = Modifier
                                 .height(54.dp)
@@ -370,6 +401,19 @@ fun AddEditRuleDialog(
                             }
                         }
                     }
+                }
+
+                if (editingRule == null && (isSearchingCandidates || searchCandidates.isNotEmpty())) {
+                    TickerSearchSuggestionList(
+                        candidates = searchCandidates,
+                        isSearching = isSearchingCandidates,
+                        onSelectCandidate = { candidate ->
+                            suppressNextRuleSearch = true
+                            searchCandidates = emptyList()
+                            tickerInput = candidate.symbol
+                            onLookupTicker(candidate.symbol)
+                        },
+                    )
                 }
 
                 // Quick Preset Chips for Index & Major ETFs
@@ -1134,6 +1178,7 @@ fun BuyRecordDialog(
     extraTriggerSuggestions: List<String> = emptyList(),
     watchlistProxyTargets: List<ProxyBuyTarget> = emptyList(),
     onLookupTargetQuote: (suspend (String) -> TickerLookupResult)? = null,
+    onSearchTickers: (suspend (String) -> List<TickerSearchCandidate>)? = null,
     onDismiss: () -> Unit,
     onSave: (
         existingId: Long?,
@@ -1215,9 +1260,37 @@ fun BuyRecordDialog(
     }
     var isLookingUpTarget by remember { mutableStateOf(false) }
     var targetLookupHint by remember { mutableStateOf<String?>(null) }
+    var buySearchCandidates by remember { mutableStateOf<List<TickerSearchCandidate>>(emptyList()) }
+    var isSearchingBuyCandidates by remember { mutableStateOf(false) }
+    var suppressNextBuySearch by remember { mutableStateOf(false) }
+
+    LaunchedEffect(symbolInput, isManualNew, editingRecord, isIndexSignal) {
+        if ((!isManualNew && editingRecord == null && !isIndexSignal) || onSearchTickers == null) {
+            buySearchCandidates = emptyList()
+            return@LaunchedEffect
+        }
+        if (suppressNextBuySearch) {
+            suppressNextBuySearch = false
+            return@LaunchedEffect
+        }
+        val query = symbolInput.trim()
+        if (query.isEmpty()) {
+            buySearchCandidates = emptyList()
+            isSearchingBuyCandidates = false
+            return@LaunchedEffect
+        }
+        isSearchingBuyCandidates = true
+        delay(300)
+        buySearchCandidates = runCatching { onSearchTickers(query) }
+            .getOrDefault(emptyList())
+            .filter { !isMarketIndexSymbol(it.symbol) }
+        isSearchingBuyCandidates = false
+    }
 
     val applyProxyTarget: (String, String?, MarketCurrency?) -> Unit = { rawSymbol, fallbackName, fallbackCurrency ->
         val cleaned = rawSymbol.trim().uppercase()
+        suppressNextBuySearch = true
+        buySearchCandidates = emptyList()
         isCustomTargetMode = false
         symbolInput = cleaned
         resolvedTargetSymbol = cleaned
@@ -1400,20 +1473,20 @@ fun BuyRecordDialog(
                         OutlinedTextField(
                             value = symbolInput,
                             onValueChange = {
-                                symbolInput = it.uppercase()
+                                symbolInput = it
                                 resolvedTargetSymbol = null
                                 if (it.any { c -> c.isDigit() } && !it.contains('.')) {
                                     currency = MarketCurrency.TWD
-                                } else if (it.isNotEmpty() && it.all { c -> c.isLetter() }) {
+                                } else if (it.isNotEmpty() && it.all { c -> c in 'A'..'Z' || c in 'a'..'z' }) {
                                     currency = MarketCurrency.USD
                                 }
                             },
-                            label = { Text("買入代號") },
-                            placeholder = { Text("例如 2330 / 00878") },
+                            label = { Text("代號或名稱搜尋") },
+                            placeholder = { Text("例如 台積電 / 正2 / NVDA") },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(
-                                capitalization = KeyboardCapitalization.Characters,
-                                keyboardType = KeyboardType.Ascii,
+                                capitalization = KeyboardCapitalization.None,
+                                keyboardType = KeyboardType.Text,
                             ),
                             modifier = Modifier
                                 .weight(1f)
@@ -1429,14 +1502,14 @@ fun BuyRecordDialog(
                         )
                     }
 
-                    if (isIndexSignal && onLookupTargetQuote != null) {
+                    if ((isIndexSignal || isManualNew) && onLookupTargetQuote != null) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                text = targetLookupHint ?: "輸入任意代號後點右側即可帶入現價與名稱",
+                                text = targetLookupHint ?: "支援中文名稱、英文或代號搜尋，或點擊右側帶入現價",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = if (targetLookupHint?.startsWith("已帶入") == true) BrandSky else TextSecondary,
                                 modifier = Modifier.weight(1f),
@@ -1456,6 +1529,16 @@ fun BuyRecordDialog(
                                 }
                             }
                         }
+                    }
+
+                    if (isSearchingBuyCandidates || buySearchCandidates.isNotEmpty()) {
+                        TickerSearchSuggestionList(
+                            candidates = buySearchCandidates,
+                            isSearching = isSearchingBuyCandidates,
+                            onSelectCandidate = { candidate ->
+                                applyProxyTarget(candidate.symbol, candidate.name, candidate.currency)
+                            },
+                        )
                     }
 
                     Row(
@@ -1656,6 +1739,73 @@ fun BuyRecordDialog(
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TickerSearchSuggestionList(
+    candidates: List<TickerSearchCandidate>,
+    isSearching: Boolean,
+    onSelectCandidate: (TickerSearchCandidate) -> Unit,
+) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = SurfaceCard,
+        border = BorderStroke(1.dp, HairlineBorder),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+        ) {
+            if (isSearching && candidates.isEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        strokeWidth = 2.dp,
+                    )
+                    Text(
+                        text = "搜尋符合標的...",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = TextSecondary,
+                    )
+                }
+            }
+            candidates.take(6).forEach { item ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelectCandidate(item) }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "${item.symbol} · ${item.name}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = item.marketLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = BrandSky,
+                    )
                 }
             }
         }

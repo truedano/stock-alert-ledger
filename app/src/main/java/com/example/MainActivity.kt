@@ -497,6 +497,7 @@ fun StockAssistantRoot(
             editingRule = editingRule,
             lookupState = lookupState,
             onLookupTicker = viewModel::lookupTicker,
+            onSearchTickers = viewModel::searchTickerCandidates,
             onDismiss = {
                 showAddEditRuleDialog = false
                 editingRule = null
@@ -543,6 +544,7 @@ fun StockAssistantRoot(
             extraTriggerSuggestions = extraTriggerSuggestions,
             watchlistProxyTargets = watchlistProxyTargets,
             onLookupTargetQuote = viewModel::lookupQuoteForQuickBuy,
+            onSearchTickers = viewModel::searchTickerCandidates,
             onDismiss = viewModel::dismissQuickBuyDialog,
             onSave = { _, symbol, displaySymbol, name, currency, buyDate, shares, unitPrice, tag, resetRuleId ->
                 viewModel.saveBuyRecord(
@@ -567,6 +569,8 @@ fun StockAssistantRoot(
             prefill = null,
             editingRecord = editingRecord,
             extraTriggerSuggestions = extraTriggerSuggestions,
+            onLookupTargetQuote = viewModel::lookupQuoteForQuickBuy,
+            onSearchTickers = viewModel::searchTickerCandidates,
             onDismiss = {
                 showPortfolioRecordDialog = false
                 editingRecord = null
