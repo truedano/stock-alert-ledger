@@ -125,6 +125,9 @@ class StockMonitorViewModel(
     private val _quickBuyDialogPrefill = MutableStateFlow<QuickBuyPrefill?>(null)
     val quickBuyDialogPrefill: StateFlow<QuickBuyPrefill?> = _quickBuyDialogPrefill.asStateFlow()
 
+    private val _highlightedRuleId = MutableStateFlow<Long?>(null)
+    val highlightedRuleId: StateFlow<Long?> = _highlightedRuleId.asStateFlow()
+
     private val _snackbarMessage = MutableStateFlow<String?>(null)
     val snackbarMessage: StateFlow<String?> = _snackbarMessage.asStateFlow()
 
@@ -584,6 +587,16 @@ class StockMonitorViewModel(
 
     fun openQuickBuyFromNotification(prefill: QuickBuyPrefill) {
         _quickBuyDialogPrefill.value = prefill
+    }
+
+    fun focusRuleFromWidget(ruleId: Long) {
+        if (ruleId > 0L) {
+            _highlightedRuleId.value = ruleId
+        }
+    }
+
+    fun consumeHighlightedRule() {
+        _highlightedRuleId.value = null
     }
 
     suspend fun lookupQuoteForQuickBuy(rawSymbol: String): TickerLookupResult {

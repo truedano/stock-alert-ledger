@@ -46,6 +46,8 @@ class StockMonitorWidgetProvider : AppWidgetProvider() {
 
     companion object {
         const val ACTION_REFRESH_WIDGET = "com.example.widget.ACTION_REFRESH_WIDGET"
+        const val ACTION_OPEN_RULE_FROM_WIDGET = "com.example.widget.ACTION_OPEN_RULE_FROM_WIDGET"
+        const val EXTRA_WIDGET_RULE_ID = "extra_widget_rule_id"
 
         fun updateAllWidgets(
             context: Context,
@@ -105,7 +107,10 @@ class StockMonitorWidgetProvider : AppWidgetProvider() {
 
                     // ListView Item Click Template
                     val itemClickIntent = Intent(context, MainActivity::class.java).apply {
+                        action = ACTION_OPEN_RULE_FROM_WIDGET
+                        `package` = context.packageName
                         flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        com.example.notification.StockNotificationHelper.attachInternalToken(context, this)
                     }
                     val itemClickPi = PendingIntent.getActivity(
                         context,

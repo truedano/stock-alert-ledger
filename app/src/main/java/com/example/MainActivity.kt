@@ -60,6 +60,7 @@ import com.example.data.local.WatchlistRuleEntity
 import com.example.domain.model.ProxyBuyTarget
 import com.example.domain.model.isMarketIndexSymbol
 import com.example.notification.StockNotificationHelper
+import com.example.widget.StockMonitorWidgetProvider
 import com.example.ui.StockMonitorViewModel
 import com.example.ui.components.AboutAppDialog
 import com.example.ui.components.AddEditRuleDialog
@@ -159,6 +160,19 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleNotificationIntent(intent: Intent?) {
+        if (intent?.action == StockMonitorWidgetProvider.ACTION_OPEN_RULE_FROM_WIDGET) {
+            if (StockNotificationHelper.isInternalTokenValid(this, intent)) {
+                val ruleId = intent.getLongExtra(StockMonitorWidgetProvider.EXTRA_WIDGET_RULE_ID, -1L)
+                if (ruleId > 0L) {
+                    viewModel.focusRuleFromWidget(ruleId)
+                }
+            }
+            intent.removeExtra(StockMonitorWidgetProvider.EXTRA_WIDGET_RULE_ID)
+            intent.removeExtra(StockNotificationHelper.EXTRA_INTERNAL_TOKEN)
+            intent.action = null
+            return
+        }
+
         val prefill = StockNotificationHelper.parseQuickBuyPrefill(this, intent) ?: return
         val notificationId = intent?.getIntExtra(StockNotificationHelper.EXTRA_NOTIFICATION_ID, -1) ?: -1
         StockNotificationHelper.cancelNotification(this, notificationId)
@@ -184,6 +198,7 @@ fun StockAssistantRoot(
     val portfolioUiState by viewModel.portfolioUiState.collectAsStateWithLifecycle()
     val lookupState by viewModel.lookupState.collectAsStateWithLifecycle()
     val quickBuyPrefill by viewModel.quickBuyDialogPrefill.collectAsStateWithLifecycle()
+    val highlightedRuleId by viewModel.highlightedRuleId.collectAsStateWithLifecycle()
     val snackbarMessage by viewModel.snackbarMessage.collectAsStateWithLifecycle()
 
     var hasNotificationPermission by remember {
@@ -206,6 +221,30 @@ fun StockAssistantRoot(
         val msg = snackbarMessage ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(msg)
         viewModel.consumeSnackbar()
+    }
+
+    var lastAutoOpenedWidgetRuleId by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(highlightedRuleId, watchlistState.items) {
+        val targetId = highlightedRuleId
+        if (targetId == null) {
+            lastAutoOpenedWidgetRuleId = null
+            return@LaunchedEffect
+        }
+        val isOnWatchlist = navController.currentBackStackEntry?.destination?.hasRoute(WatchlistRoute::class) == true
+        if (!isOnWatchlist) {
+            navController.navigate(WatchlistRoute) {
+                popUpTo(navController.graph.findStartDestination().id) {
+                    saveState = true
+                }
+                launchSingleTop = true
+                restoreState = true
+            }
+        }
+        val matchedItem = watchlistState.items.firstOrNull { it.rule.id == targetId }
+        if (matchedItem != null && matchedItem.rule.isTriggered && lastAutoOpenedWidgetRuleId != targetId) {
+            lastAutoOpenedWidgetRuleId = targetId
+            viewModel.openQuickBuyFromRule(matchedItem)
+        }
     }
 
     // Dialog states
@@ -360,6 +399,8 @@ fun StockAssistantRoot(
                         WatchlistScreen(
                             uiState = watchlistState,
                             hasNotificationPermission = hasNotificationPermission,
+                            highlightedRuleId = highlightedRuleId,
+                            onHighlightedRuleConsumed = viewModel::consumeHighlightedRule,
                             onRequestNotificationPermission = requestNotificationPermission,
                             onRefresh = { viewModel.refreshAll(sendNotifications = true) },
                             onAddClick = {

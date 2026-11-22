@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ShowChart
@@ -43,6 +44,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -85,6 +87,8 @@ import com.example.ui.theme.TextSecondary
 fun WatchlistScreen(
     uiState: WatchlistUiState,
     hasNotificationPermission: Boolean,
+    highlightedRuleId: Long? = null,
+    onHighlightedRuleConsumed: () -> Unit = {},
     onRequestNotificationPermission: () -> Unit,
     onRefresh: () -> Unit,
     onAddClick: () -> Unit,
@@ -126,7 +130,21 @@ fun WatchlistScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.TopCenter,
             ) {
+                val listState = rememberLazyListState()
+                val headerCount = if (!hasNotificationPermission) 3 else 2
+
+                LaunchedEffect(highlightedRuleId, uiState.items, hasNotificationPermission) {
+                    val targetId = highlightedRuleId ?: return@LaunchedEffect
+                    val idx = uiState.items.indexOfFirst { it.rule.id == targetId }
+                    if (idx >= 0) {
+                        listState.animateScrollToItem(headerCount + idx)
+                        kotlinx.coroutines.delay(1800L)
+                        onHighlightedRuleConsumed()
+                    }
+                }
+
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier
                         .widthIn(max = 720.dp)
                         .fillMaxSize(),
@@ -210,6 +228,7 @@ fun WatchlistScreen(
                         ) { item ->
                             WatchlistRuleCard(
                                 item = item,
+                                isHighlighted = item.rule.id == highlightedRuleId,
                                 onToggleEnabled = { enabled ->
                                     onToggleEnabled(item.rule.id, enabled)
                                 },
@@ -287,6 +306,7 @@ private fun EmptyWatchlistCard(
 @Composable
 private fun WatchlistRuleCard(
     item: WatchlistItemUi,
+    isHighlighted: Boolean = false,
     onToggleEnabled: (Boolean) -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
@@ -300,6 +320,7 @@ private fun WatchlistRuleCard(
     var isChartExpanded by remember { mutableStateOf(false) }
 
     val borderColor = when {
+        isHighlighted -> BrandSky
         isTriggered -> AlertAmber
         !rule.isEnabled -> HairlineBorder.copy(alpha = 0.5f)
         else -> HairlineBorder

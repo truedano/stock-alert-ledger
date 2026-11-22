@@ -94,8 +94,10 @@ class StockMonitorRemoteViewsFactory(
             views.setTextColor(R.id.item_status, android.graphics.Color.parseColor("#38BDF8"))
         }
 
-        // 點擊項目整列直接觸發開啟 App
-        val fillInIntent = Intent()
+        // 點擊項目整列時將該規則 ID 傳給 MainActivity 精準定位
+        val fillInIntent = Intent().apply {
+            putExtra(StockMonitorWidgetProvider.EXTRA_WIDGET_RULE_ID, rule.id)
+        }
         views.setOnClickFillInIntent(R.id.widget_item_row, fillInIntent)
 
         return views

@@ -151,4 +151,26 @@ class ExampleRobolectricTest {
         assertTrue(StockNotificationHelper.isInternalTokenValid(context, dismissIntent))
         assertFalse(StockNotificationHelper.isInternalTokenValid(context, forgedIntent))
     }
+
+    @Test
+    fun `widget rule click intent carries valid internal token and rule id`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val validWidgetIntent = Intent(context, MainActivity::class.java).apply {
+            action = com.example.widget.StockMonitorWidgetProvider.ACTION_OPEN_RULE_FROM_WIDGET
+            StockNotificationHelper.attachInternalToken(context, this)
+            putExtra(com.example.widget.StockMonitorWidgetProvider.EXTRA_WIDGET_RULE_ID, 25L)
+        }
+        val forgedWidgetIntent = Intent(context, MainActivity::class.java).apply {
+            action = com.example.widget.StockMonitorWidgetProvider.ACTION_OPEN_RULE_FROM_WIDGET
+            putExtra(StockNotificationHelper.EXTRA_INTERNAL_TOKEN, "forged")
+            putExtra(com.example.widget.StockMonitorWidgetProvider.EXTRA_WIDGET_RULE_ID, 25L)
+        }
+
+        assertTrue(StockNotificationHelper.isInternalTokenValid(context, validWidgetIntent))
+        assertEquals(
+            25L,
+            validWidgetIntent.getLongExtra(com.example.widget.StockMonitorWidgetProvider.EXTRA_WIDGET_RULE_ID, -1L),
+        )
+        assertFalse(StockNotificationHelper.isInternalTokenValid(context, forgedWidgetIntent))
+    }
 }

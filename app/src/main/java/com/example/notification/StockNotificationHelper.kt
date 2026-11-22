@@ -327,6 +327,10 @@ object StockNotificationHelper {
         )
     }
 
+    fun attachInternalToken(context: Context, intent: Intent): Intent {
+        return intent.putExtra(EXTRA_INTERNAL_TOKEN, getOrCreateInternalToken(context))
+    }
+
     fun parseQuickBuyPrefill(context: Context, intent: Intent?): QuickBuyPrefill? {
         if (intent == null) return null
         if (intent.action != ACTION_QUICK_BUY_FROM_NOTIFICATION) return null
