@@ -15,7 +15,13 @@
 
 ### ✨ 核心功能
 
-1. **台美股代號/名稱即時搜尋與指數交易標的快速對照（v1.9.0+）**
+1. **台指期大台法人留倉與散戶多空比籌碼看板、全螢幕警報中心與自選分類標籤（v1.10.0+）**
+   - **期交所台指期法人未平倉與散戶多空比指標**：即時爬取台灣期貨交易所 Open API（三大法人期貨未平倉部位與每日市場行情），精準計算外資淨未平倉（大台 OI）以及小台/微台散戶淨留倉與「散戶多空比」逆向籌碼指標；並於宏觀情緒看板中提供摺疊子卡與指標判讀指引，快速判別外資動向與散戶軋空/殺多氛圍。
+   - **全螢幕警報歷史中心 (Alert History Center)**：將歷史紀錄升級為獨立全螢幕頁面（整合頂部 TopAppBar、返回導航與滑動列表），支援標的 FilterChip 即時過濾、清空歷史記錄二次確認對話框，大幅提升長列表閱讀與管理體驗。
+   - **自選監控清單類別與狀態快速篩選列**：自選股主頁面頂部新增分類標籤（全部、台股、美股、指數）與狀態標籤（已觸發、監控中、已停用），支援即時橫向滑動與快速聚焦篩選目標標的。
+   - **桌面小工具點擊直達與自動買入導流**：點擊桌面微型監控 Widget 項目時直接定位跳轉至 App 內對應監控規則卡片並高亮藍框視覺引導；若點擊之標的已處於觸發狀態，自動彈出快速記帳買入對話框，實現桌面盯盤至快速下單記帳無縫串接。
+
+2. **台美股代號/名稱即時搜尋與指數交易標的快速對照（v1.9.0+）**
    - **關鍵字即時搜尋與代號自動補齊**：新增監控規則或買入記帳時，輸入代號或中文名稱即刻自 TWSE/TPEx 清單與 Yahoo Finance 檢索匹配標的，支援點擊一鍵帶入代號、名稱與當前股價，告別手動背代號與輸入錯誤。
    - **大盤指數觸發替代標的映射**：收到大盤指數（如加權指數 `^TWII`、標普 500 `^GSPC` 等）警報訊號時，記帳對話框自動推薦對應可交易 ETF 標的（如 0050、SPY、VOO）或整合現有庫存持股，並支援一鍵重抓即時價格與自訂替代標的。
    - **通知列快速動作捷徑**：股價警報推播直接提供「快速記帳」與「暫停監控」（測試通知提供「關閉通知」）快捷按鈕，無須切換 App 即可在通知列直接處理警報與暫停特定監控規則。
@@ -115,7 +121,13 @@
 
 ### ✨ Key Features
 
-1. **Real-time Ticker Search, Index Proxy Target Mapping & Notification Quick Actions (v1.9.0+)**
+1. **Taiwan Index Futures Institutional OI & Retail Sentiment Gauges, Full-Screen Alert History & Watchlist Filter Tabs (v1.10.0+)**
+   - **TAIFEX Institutional Futures OI & Retail Long/Short Ratio**: Fetches real-time open interest and daily market reports from Taiwan Futures Exchange (TAIFEX) Open API, calculating Foreign Institutional net open contracts (TX OI) and Mini-TX / Micro-TX retail net positions & "Retail Long/Short Ratio" sentiment indicators; integrated into the macro sentiment banner with interactive explainers.
+   - **Full-Screen Alert History Center**: Upgrades alert history from a basic dialog into a dedicated full-screen page featuring TopAppBar navigation, symbol filter chips, and clear confirmation dialog for fluid log management.
+   - **Watchlist Category & Status Quick-Filter Chips**: Adds quick filter chips to the watchlist (All, Taiwan, US, Indices) along with rule status (Triggered, Monitoring, Disabled) for rapid target filtering and clutter-free organization.
+   - **Widget Direct Rule Navigation & Auto Buy Trigger**: Tapping any rule row on the home screen AppWidget directly opens the App, highlights the target rule with visual focus, and automatically launches the Quick-Buy dialog if the rule is already triggered.
+
+2. **Real-time Ticker Search, Index Proxy Target Mapping & Notification Quick Actions (v1.9.0+)**
    - **Real-Time Ticker & Symbol Autocomplete**: Search Taiwan and US stocks by symbol or company name with instant auto-suggestions from TWSE/TPEx and Yahoo Finance; pre-fills ticker, name, and live price with a single tap.
    - **Market Index Signal Proxy Target Mapping**: When market index alerts (e.g., `^TWII`, `^GSPC`) are triggered, the Quick-Buy ledger automatically recommends tradable proxy ETFs (e.g., 0050, SPY, VOO) or existing portfolio holdings, with one-tap live price lookup.
    - **Notification Action Buttons**: Push notifications include direct action shortcuts ("Quick Buy" and "Pause Alert"), allowing users to act on or pause alerts straight from the system notification shade.
