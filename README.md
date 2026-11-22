@@ -15,7 +15,13 @@
 
 ### ✨ 核心功能
 
-1. **桌面微型監控 Widget (AppWidget) 與即時連動（v1.7.0+）**
+1. **自選股 K 線技術圖表與融資維持率副圖（v1.8.0+）**
+   - **K 線展開與買點可視化**：自選股卡片支援一鍵展開高精細互動式 K 線圖，直觀查看歷史走勢，並於主圖直接繪製警報設定之買點防線（如 MA 均線、波段回撤價位或目標價位）。
+   - **推估融資維持率副圖與 130% 追繳防線**：台股標的自動呈現歷史推估融資維持率副圖，標示 130% 融資斷頭警戒紅線與即時維持率標籤，並於主圖同步繪製追繳臨界價位防線，精準避開或把握籌碼斷頭賣壓。
+   - **多週期靈活切換**：內建快捷週期切換晶片（1 個月、3 個月、6 個月、1 年），流暢縮放與檢視中長期位階。
+   - **卡片排版最佳化**：獨立「預定買入金額與預估股數」專屬資訊橫幅，解決手機窄螢幕操作按鈕與金額擠壓換行問題。
+
+2. **桌面微型監控 Widget (AppWidget) 與即時連動（v1.7.0+）**
    - **桌面即時盯盤小工具**：無須打開 App 即可在手機桌面隨時查看自選標的最新現價、漲跌幅、觸發警報狀態與主要監控條件。
    - **一鍵手動與自動同步整理**：提供小工具快速更新按鈕，並與 App 內部資料庫與輪詢狀態即時雙向連動。
 
@@ -103,7 +109,13 @@
 
 ### ✨ Key Features
 
-1. **AppWidget Micro-Monitor & Live Sync (v1.7.0+)**
+1. **Interactive Candlestick Charts & Margin Maintenance Rate Indicators (v1.8.0+)**
+   - **Expandable K-Line Chart & Strategy Visualizer**: One-tap expansion of high-resolution candlestick charts on watchlist cards with visible alert target price lines directly overlaid on the chart (MA support, peak drawdown targets, price thresholds).
+   - **Estimated Margin Maintenance Sub-Chart & 130% Liquidation Line**: Real-time margin keep rate sub-chart for Taiwan equities with a 130% margin-call red boundary and current keep rate badge, mapping margin risk directly onto the main price chart.
+   - **Flexible Timeframe Selector**: Quick time-range filter chips (1M / 3M / 6M / 1Y) for seamless multi-period trend and cycle analysis.
+   - **Refined Card Layout**: Dedicated clean banner for planned purchase budget and estimated shares, preventing button clutter and line truncation on narrow mobile screens.
+
+2. **AppWidget Micro-Monitor & Live Sync (v1.7.0+)**
    - **Home Screen AppWidget**: Glance at real-time stock prices, intraday changes, alert trigger status, and key monitor rules directly on your home screen without opening the app.
    - **Manual & Automated Sync**: Integrated widget refresh controls with instant bidirectional synchronization to local database state.
 
