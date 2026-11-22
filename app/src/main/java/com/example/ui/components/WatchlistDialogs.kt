@@ -41,6 +41,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,9 +61,14 @@ import com.example.domain.model.MovingAverageCalculator
 import com.example.domain.model.MovingAverageCondition
 import com.example.domain.model.MovingAverageTriggerMode
 import com.example.domain.model.PeakDrawdownCondition
+import com.example.domain.model.ProxyBuyTarget
 import com.example.domain.model.RsiCondition
 import com.example.domain.model.StockQuote
+import com.example.domain.model.TickerLookupResult
+import com.example.domain.model.isMarketIndexSymbol
+import com.example.domain.model.recommendedProxyTargetsForIndex
 import com.example.notification.QuickBuyPrefill
+import kotlinx.coroutines.launch
 import com.example.ui.LookupUiState
 import com.example.ui.theme.AlertAmber
 import com.example.ui.theme.BrandSky
@@ -1123,6 +1129,8 @@ fun BuyRecordDialog(
     prefill: QuickBuyPrefill?,
     editingRecord: BuyRecordEntity?,
     extraTriggerSuggestions: List<String> = emptyList(),
+    watchlistProxyTargets: List<ProxyBuyTarget> = emptyList(),
+    onLookupTargetQuote: (suspend (String) -> TickerLookupResult)? = null,
     onDismiss: () -> Unit,
     onSave: (
         existingId: Long?,
@@ -1139,6 +1147,8 @@ fun BuyRecordDialog(
     onDelete: ((Long) -> Unit)? = null,
 ) {
     val isManualNew = prefill == null && editingRecord == null
+    val isIndexSignal = prefill != null && editingRecord == null && isMarketIndexSymbol(prefill.symbol)
+    val scope = rememberCoroutineScope()
 
     var buyDate by remember(prefill, editingRecord) {
         mutableStateOf(
@@ -1146,10 +1156,27 @@ fun BuyRecordDialog(
         )
     }
     var symbolInput by remember(prefill, editingRecord) {
-        mutableStateOf(editingRecord?.displaySymbol ?: prefill?.displaySymbol ?: "")
+        mutableStateOf(
+            when {
+                editingRecord != null -> editingRecord.displaySymbol
+                isIndexSignal -> ""
+                prefill != null -> prefill.displaySymbol
+                else -> ""
+            }
+        )
+    }
+    var resolvedTargetSymbol by remember(prefill, editingRecord) {
+        mutableStateOf<String?>(null)
     }
     var nameInput by remember(prefill, editingRecord) {
-        mutableStateOf(editingRecord?.name ?: prefill?.name ?: "")
+        mutableStateOf(
+            when {
+                editingRecord != null -> editingRecord.name
+                isIndexSignal -> ""
+                prefill != null -> prefill.name
+                else -> ""
+            }
+        )
     }
     var currency by remember(prefill, editingRecord) {
         mutableStateOf(editingRecord?.currency ?: prefill?.currency ?: MarketCurrency.TWD)
@@ -1158,6 +1185,7 @@ fun BuyRecordDialog(
         mutableStateOf(
             when {
                 editingRecord != null -> Formatters.formatRawPriceForInput(editingRecord.unitPrice, editingRecord.currency)
+                isIndexSignal -> ""
                 prefill != null && prefill.unitPrice > 0.0 -> Formatters.formatRawPriceForInput(prefill.unitPrice, prefill.currency)
                 else -> ""
             }
@@ -1167,6 +1195,7 @@ fun BuyRecordDialog(
         mutableStateOf(
             when {
                 editingRecord != null -> editingRecord.shares.toString()
+                isIndexSignal -> ""
                 prefill != null && prefill.estimatedShares > 0.0 -> {
                     String.format(java.util.Locale.US, "%.2f", prefill.estimatedShares)
                 }
@@ -1179,12 +1208,54 @@ fun BuyRecordDialog(
             editingRecord?.triggerTag ?: prefill?.triggerTag ?: "手動買入"
         )
     }
+    var isLookingUpTarget by remember { mutableStateOf(false) }
+    var targetLookupHint by remember { mutableStateOf<String?>(null) }
+
+    val applyProxyTarget: (String, String?, MarketCurrency?) -> Unit = { rawSymbol, fallbackName, fallbackCurrency ->
+        val cleaned = rawSymbol.trim().uppercase()
+        symbolInput = cleaned
+        resolvedTargetSymbol = cleaned
+        if (!fallbackName.isNullOrBlank()) nameInput = fallbackName
+        if (fallbackCurrency != null) currency = fallbackCurrency
+        targetLookupHint = null
+
+        if (onLookupTargetQuote != null && cleaned.isNotEmpty() && !isMarketIndexSymbol(cleaned)) {
+            isLookingUpTarget = true
+            scope.launch {
+                when (val result = onLookupTargetQuote(cleaned)) {
+                    is TickerLookupResult.Success -> {
+                        val quote = result.quote
+                        resolvedTargetSymbol = quote.symbol
+                        symbolInput = quote.displaySymbol
+                        nameInput = quote.name
+                        currency = quote.currency
+                        if (quote.currentPrice > 0.0) {
+                            unitPriceText = Formatters.formatRawPriceForInput(quote.currentPrice, quote.currency)
+                            val planned = prefill?.plannedAmount ?: 0.0
+                            if (planned > 0.0) {
+                                sharesText = String.format(java.util.Locale.US, "%.2f", planned / quote.currentPrice)
+                            }
+                        }
+                        targetLookupHint = "已帶入 ${quote.displaySymbol} 最新報價"
+                    }
+                    is TickerLookupResult.NotFound -> targetLookupHint = result.message
+                    is TickerLookupResult.RateLimited -> targetLookupHint = result.message
+                    is TickerLookupResult.Error -> targetLookupHint = result.message
+                }
+                isLookingUpTarget = false
+            }
+        }
+    }
 
     val unitPrice = unitPriceText.toDoubleOrNull() ?: 0.0
     val shares = sharesText.toDoubleOrNull() ?: 0.0
     val totalCost = unitPrice * shares
 
-    val canSave = symbolInput.isNotBlank() && buyDate.isNotBlank() && unitPrice > 0.0 && shares > 0.0
+    val canSave = symbolInput.isNotBlank() &&
+        !isMarketIndexSymbol(symbolInput) &&
+        buyDate.isNotBlank() &&
+        unitPrice > 0.0 &&
+        shares > 0.0
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -1227,9 +1298,13 @@ fun BuyRecordDialog(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "${prefill.displaySymbol} · ${prefill.name}",
+                                    text = if (isIndexSignal) {
+                                        "觸發訊號：${prefill.displaySymbol} · ${prefill.name}"
+                                    } else {
+                                        "${prefill.displaySymbol} · ${prefill.name}"
+                                    },
                                     style = MaterialTheme.typography.titleMedium,
                                     color = TextPrimary,
                                 )
@@ -1238,8 +1313,49 @@ fun BuyRecordDialog(
                                     style = MaterialTheme.typography.labelMedium,
                                     color = AlertAmber,
                                 )
+                                if (isIndexSignal) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "大盤指數無法直接買賣，請選擇下方對應 ETF 或輸入實際買入標的。",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = TextSecondary,
+                                    )
+                                }
                             }
+                            Spacer(modifier = Modifier.width(8.dp))
                             MarketBadge(currency = currency)
+                        }
+                    }
+                }
+
+                if (isIndexSignal && prefill != null) {
+                    val proxyOptions = remember(prefill.symbol, watchlistProxyTargets) {
+                        (recommendedProxyTargetsForIndex(prefill.symbol) + watchlistProxyTargets)
+                            .filter { !isMarketIndexSymbol(it.symbol) }
+                            .distinctBy { it.symbol.uppercase() }
+                    }
+                    Text(
+                        text = "選擇實際買入標的",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = TextPrimary,
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        proxyOptions.forEach { target ->
+                            val isSelected = symbolInput.trim().equals(target.symbol, ignoreCase = true)
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = {
+                                    applyProxyTarget(target.symbol, target.name, target.currency)
+                                },
+                                label = { Text("${target.symbol} ${target.name}") },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = BrandSkyContainer,
+                                    selectedLabelColor = BrandSky,
+                                ),
+                            )
                         }
                     }
                 }
@@ -1253,23 +1369,25 @@ fun BuyRecordDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
 
-                if (isManualNew || editingRecord != null) {
+                if (isManualNew || editingRecord != null || isIndexSignal) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         OutlinedTextField(
                             value = symbolInput,
                             onValueChange = {
                                 symbolInput = it.uppercase()
+                                resolvedTargetSymbol = null
                                 if (it.any { c -> c.isDigit() } && !it.contains('.')) {
                                     currency = MarketCurrency.TWD
                                 } else if (it.isNotEmpty() && it.all { c -> c.isLetter() }) {
                                     currency = MarketCurrency.USD
                                 }
                             },
-                            label = { Text("股票代號") },
-                            placeholder = { Text("2330.TW / AAPL") },
+                            label = { Text("買入代號") },
+                            placeholder = { Text("0050.TW / 00631L.TW") },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(
                                 capitalization = KeyboardCapitalization.Characters,
@@ -1280,11 +1398,40 @@ fun BuyRecordDialog(
                         OutlinedTextField(
                             value = nameInput,
                             onValueChange = { nameInput = it },
-                            label = { Text("股票名稱") },
-                            placeholder = { Text("台積電") },
+                            label = { Text("標的名稱") },
+                            placeholder = { Text("元大台灣50") },
                             singleLine = true,
                             modifier = Modifier.weight(1f),
                         )
+                    }
+
+                    if (isIndexSignal && onLookupTargetQuote != null) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = targetLookupHint ?: "輸入任意代號後可點擊右側帶入最新市價",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (targetLookupHint?.startsWith("已帶入") == true) BrandSky else TextSecondary,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            OutlinedButton(
+                                enabled = symbolInput.isNotBlank() && !isMarketIndexSymbol(symbolInput) && !isLookingUpTarget,
+                                onClick = { applyProxyTarget(symbolInput, nameInput.ifBlank { null }, null) },
+                            ) {
+                                if (isLookingUpTarget) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp,
+                                    )
+                                } else {
+                                    Text("帶入現價")
+                                }
+                            }
+                        }
                     }
 
                     Row(
@@ -1449,9 +1596,12 @@ fun BuyRecordDialog(
                             enabled = canSave,
                             modifier = Modifier.testTag("confirm_buy_record_button"),
                             onClick = {
-                                val resolvedSymbol = prefill?.symbol
-                                    ?: editingRecord?.symbol
-                                    ?: symbolInput.trim().uppercase()
+                                val resolvedSymbol = when {
+                                    isIndexSignal -> resolvedTargetSymbol ?: symbolInput.trim().uppercase()
+                                    prefill != null -> prefill.symbol
+                                    editingRecord != null -> editingRecord.symbol
+                                    else -> symbolInput.trim().uppercase()
+                                }
                                 val resolvedDisplay = symbolInput.trim().uppercase()
                                 onSave(
                                     editingRecord?.id,

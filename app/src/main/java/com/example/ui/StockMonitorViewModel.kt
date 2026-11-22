@@ -586,6 +586,20 @@ class StockMonitorViewModel(
         _quickBuyDialogPrefill.value = prefill
     }
 
+    suspend fun lookupQuoteForQuickBuy(rawSymbol: String): TickerLookupResult {
+        val cleaned = rawSymbol.trim().uppercase()
+        if (cleaned.isEmpty()) return TickerLookupResult.NotFound("請輸入股票代號")
+        val cachedQuote = watchlistUiState.value.items.firstOrNull {
+            !it.quote?.isSimulated.let { sim -> sim == true } &&
+                (it.rule.symbol.equals(cleaned, ignoreCase = true) ||
+                    it.rule.displaySymbol.equals(cleaned, ignoreCase = true))
+        }?.quote
+        if (cachedQuote != null && cachedQuote.currentPrice > 0.0) {
+            return TickerLookupResult.Success(cachedQuote)
+        }
+        return marketRepo.lookupTicker(cleaned)
+    }
+
     fun dismissQuickBuyDialog() {
         _quickBuyDialogPrefill.value = null
     }

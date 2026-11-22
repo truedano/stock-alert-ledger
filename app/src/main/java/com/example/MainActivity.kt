@@ -57,6 +57,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.lifecycle.lifecycleScope
 import com.example.data.local.BuyRecordEntity
 import com.example.data.local.WatchlistRuleEntity
+import com.example.domain.model.ProxyBuyTarget
+import com.example.domain.model.isMarketIndexSymbol
 import com.example.notification.StockNotificationHelper
 import com.example.ui.StockMonitorViewModel
 import com.example.ui.components.AboutAppDialog
@@ -522,12 +524,22 @@ fun StockAssistantRoot(
         (fromRules + fromRecords).distinct()
     }
 
+    val watchlistProxyTargets = remember(watchlistState.items) {
+        watchlistState.items
+            .map { it.rule }
+            .filter { !isMarketIndexSymbol(it.symbol) }
+            .distinctBy { it.symbol.uppercase() }
+            .map { ProxyBuyTarget(symbol = it.symbol, name = it.name, currency = it.currency) }
+    }
+
     // Quick-Buy Confirmation Dialog (from Notification PendingIntent or Watchlist Card)
     quickBuyPrefill?.let { prefill ->
         BuyRecordDialog(
             prefill = prefill,
             editingRecord = null,
             extraTriggerSuggestions = extraTriggerSuggestions,
+            watchlistProxyTargets = watchlistProxyTargets,
+            onLookupTargetQuote = viewModel::lookupQuoteForQuickBuy,
             onDismiss = viewModel::dismissQuickBuyDialog,
             onSave = { _, symbol, displaySymbol, name, currency, buyDate, shares, unitPrice, tag, resetRuleId ->
                 viewModel.saveBuyRecord(
