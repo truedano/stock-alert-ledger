@@ -15,7 +15,13 @@
 
 ### ✨ 核心功能
 
-1. **自選股 K 線技術圖表與融資維持率副圖（v1.8.0+）**
+1. **台美股代號/名稱即時搜尋與指數交易標的快速對照（v1.9.0+）**
+   - **關鍵字即時搜尋與代號自動補齊**：新增監控規則或買入記帳時，輸入代號或中文名稱即刻自 TWSE/TPEx 清單與 Yahoo Finance 檢索匹配標的，支援點擊一鍵帶入代號、名稱與當前股價，告別手動背代號與輸入錯誤。
+   - **大盤指數觸發替代標的映射**：收到大盤指數（如加權指數 `^TWII`、標普 500 `^GSPC` 等）警報訊號時，記帳對話框自動推薦對應可交易 ETF 標的（如 0050、SPY、VOO）或整合現有庫存持股，並支援一鍵重抓即時價格與自訂替代標的。
+   - **通知列快速動作捷徑**：股價警報推播直接提供「快速記帳」與「暫停監控」（測試通知提供「關閉通知」）快捷按鈕，無須切換 App 即可在通知列直接處理警報與暫停特定監控規則。
+   - **網路請求指數退避重試 (Exponential Backoff)**：強化外部行情與證交所融資爬蟲的容錯機制，遭遇伺服器暫時性異常時自動重試，確保報價不中斷。
+
+2. **自選股 K 線技術圖表與融資維持率副圖（v1.8.0+）**
    - **K 線展開與買點可視化**：自選股卡片支援一鍵展開高精細互動式 K 線圖，直觀查看歷史走勢，並於主圖直接繪製警報設定之買點防線（如 MA 均線、波段回撤價位或目標價位）。
    - **推估融資維持率副圖與 130% 追繳防線**：台股標的自動呈現歷史推估融資維持率副圖，標示 130% 融資斷頭警戒紅線與即時維持率標籤，並於主圖同步繪製追繳臨界價位防線，精準避開或把握籌碼斷頭賣壓。
    - **多週期靈活切換**：內建快捷週期切換晶片（1 個月、3 個月、6 個月、1 年），流暢縮放與檢視中長期位階。
@@ -109,7 +115,13 @@
 
 ### ✨ Key Features
 
-1. **Interactive Candlestick Charts & Margin Maintenance Rate Indicators (v1.8.0+)**
+1. **Real-time Ticker Search, Index Proxy Target Mapping & Notification Quick Actions (v1.9.0+)**
+   - **Real-Time Ticker & Symbol Autocomplete**: Search Taiwan and US stocks by symbol or company name with instant auto-suggestions from TWSE/TPEx and Yahoo Finance; pre-fills ticker, name, and live price with a single tap.
+   - **Market Index Signal Proxy Target Mapping**: When market index alerts (e.g., `^TWII`, `^GSPC`) are triggered, the Quick-Buy ledger automatically recommends tradable proxy ETFs (e.g., 0050, SPY, VOO) or existing portfolio holdings, with one-tap live price lookup.
+   - **Notification Action Buttons**: Push notifications include direct action shortcuts ("Quick Buy" and "Pause Alert"), allowing users to act on or pause alerts straight from the system notification shade.
+   - **Network Request Resilience**: Integrated exponential backoff retry mechanisms for Yahoo Finance and TWSE market data fetching to ensure uninterrupted quotes.
+
+2. **Interactive Candlestick Charts & Margin Maintenance Rate Indicators (v1.8.0+)**
    - **Expandable K-Line Chart & Strategy Visualizer**: One-tap expansion of high-resolution candlestick charts on watchlist cards with visible alert target price lines directly overlaid on the chart (MA support, peak drawdown targets, price thresholds).
    - **Estimated Margin Maintenance Sub-Chart & 130% Liquidation Line**: Real-time margin keep rate sub-chart for Taiwan equities with a 130% margin-call red boundary and current keep rate badge, mapping margin risk directly onto the main price chart.
    - **Flexible Timeframe Selector**: Quick time-range filter chips (1M / 3M / 6M / 1Y) for seamless multi-period trend and cycle analysis.
