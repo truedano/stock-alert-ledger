@@ -16,6 +16,7 @@ import okhttp3.Request
 
 class YahooFinanceService(
     private val client: OkHttpClient = defaultOkHttpClient(),
+    private val delayFn: suspend (Long) -> Unit = { kotlinx.coroutines.delay(it) },
 ) {
     private val json = Json {
         ignoreUnknownKeys = true
@@ -75,43 +76,65 @@ class YahooFinanceService(
         }
     }
 
-    private fun fetchSymbol(symbol: String): TickerLookupResult {
+    private suspend fun fetchSymbol(symbol: String): TickerLookupResult {
         val encoded = URLEncoder.encode(symbol, "UTF-8")
         val url = "https://query1.finance.yahoo.com/v8/finance/chart/$encoded?range=10y&interval=1d"
-        val request = Request.Builder()
-            .url(url)
-            .header("User-Agent", BROWSER_USER_AGENT)
-            .header("Accept", "application/json")
-            .get()
-            .build()
 
         return try {
-            client.newCall(request).execute().use { response ->
-                when {
-                    response.code == 429 -> {
-                        TickerLookupResult.RateLimited("Yahoo Finance 請求過於頻繁 (HTTP 429)，已保留快取報價")
-                    }
-                    response.code == 404 -> {
-                        TickerLookupResult.NotFound("查無 $symbol")
-                    }
-                    !response.isSuccessful -> {
-                        TickerLookupResult.Error("伺服器回應錯誤 (HTTP ${response.code})")
-                    }
-                    else -> {
-                        val body = response.body?.string().orEmpty()
-                        if (body.isBlank()) {
-                            return TickerLookupResult.NotFound("回傳內容為空")
+            val attemptOutcome = executeWithExponentialBackoff(
+                maxAttempts = 3,
+                delayFn = delayFn,
+                shouldRetry = { it.isTransientServerError },
+            ) {
+                val request = Request.Builder()
+                    .url(url)
+                    .header("User-Agent", BROWSER_USER_AGENT)
+                    .header("Accept", "application/json")
+                    .get()
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+                    when {
+                        response.code == 429 -> HttpAttemptResult(
+                            result = TickerLookupResult.RateLimited("Yahoo Finance 請求過於頻繁 (HTTP 429)，已保留快取報價"),
+                            isTransientServerError = false,
+                        )
+                        response.code == 404 -> HttpAttemptResult(
+                            result = TickerLookupResult.NotFound("查無 $symbol"),
+                            isTransientServerError = false,
+                        )
+                        response.code in 500..599 -> HttpAttemptResult(
+                            result = TickerLookupResult.Error("伺服器暫時無法回應 (HTTP ${response.code})"),
+                            isTransientServerError = true,
+                        )
+                        !response.isSuccessful -> HttpAttemptResult(
+                            result = TickerLookupResult.Error("伺服器回應錯誤 (HTTP ${response.code})"),
+                            isTransientServerError = false,
+                        )
+                        else -> {
+                            val body = response.body?.string().orEmpty()
+                            val parsed = if (body.isBlank()) {
+                                TickerLookupResult.NotFound("回傳內容為空")
+                            } else {
+                                parseChartJson(symbol, body)
+                            }
+                            HttpAttemptResult(result = parsed, isTransientServerError = false)
                         }
-                        parseChartJson(symbol, body)
                     }
                 }
             }
+            attemptOutcome.result
         } catch (e: IOException) {
             TickerLookupResult.Error("網路連線失敗：${e.localizedMessage ?: "請檢查網路狀態"}")
         } catch (e: Exception) {
             TickerLookupResult.Error("解析報價失敗：${e.localizedMessage ?: "未知錯誤"}")
         }
     }
+
+    private data class HttpAttemptResult(
+        val result: TickerLookupResult,
+        val isTransientServerError: Boolean,
+    )
 
     internal fun parseChartJson(requestedSymbol: String, rawJson: String): TickerLookupResult {
         val parsed = json.decodeFromString(YahooChartResponse.serializer(), rawJson)
