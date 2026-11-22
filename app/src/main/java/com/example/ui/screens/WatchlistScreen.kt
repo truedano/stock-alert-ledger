@@ -43,6 +43,10 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -586,14 +590,15 @@ private fun WatchlistRuleCard(
             }
 
             // Condition & Planned Budget Strip
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                // 第一行：警報條件徽章 + 操作功能按鈕（展開圖表、編輯、刪除）
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     // 條件標籤化 (Badge) & 觸發狀態聯動高亮
                     val conditionBadgeBg = if (isTriggered) AlertAmberContainer else SurfaceCardHigh
@@ -616,9 +621,10 @@ private fun WatchlistRuleCard(
                         shape = RoundedCornerShape(6.dp),
                         color = conditionBadgeBg,
                         border = BorderStroke(1.dp, conditionBadgeBorder),
+                        modifier = Modifier.weight(1f, fill = false),
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
@@ -635,14 +641,70 @@ private fun WatchlistRuleCard(
                                 style = MaterialTheme.typography.labelSmall,
                                 color = conditionTextColor,
                                 fontWeight = if (isTriggered) FontWeight.Bold else FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }
 
-                    // 預定買入與股數主次分離
+                    // 右側功能按鈕列
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isChartExpanded) BrandSkyContainer else SurfaceCardHigh.copy(alpha = 0.5f),
+                            border = BorderStroke(1.dp, if (isChartExpanded) BrandSky.copy(alpha = 0.6f) else HairlineBorder.copy(alpha = 0.5f)),
+                        ) {
+                            IconButton(
+                                onClick = { isChartExpanded = !isChartExpanded },
+                                modifier = Modifier.size(32.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Rounded.ShowChart,
+                                    contentDescription = if (isChartExpanded) "收合 K 線圖" else "展開 K 線圖",
+                                    tint = if (isChartExpanded) BrandSky else TextSecondary,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        IconButton(
+                            onClick = onEdit,
+                            modifier = Modifier.size(32.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Edit,
+                                contentDescription = "編輯規則",
+                                tint = TextSecondary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                        IconButton(
+                            onClick = onDelete,
+                            modifier = Modifier.size(32.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.DeleteOutline,
+                                contentDescription = "刪除規則",
+                                tint = TextSecondary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                }
+
+                // 第二行：預定買入與預估股數（獨立整行，保證不被擠壓或換行裁切）
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(SurfaceCardHigh.copy(alpha = 0.35f))
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Text(
                             text = "預定買入",
@@ -655,36 +717,13 @@ private fun WatchlistRuleCard(
                             color = TextPrimary,
                             fontWeight = FontWeight.SemiBold,
                         )
-                        item.estimatedShares?.let { shares ->
-                            Text(
-                                text = "(${Formatters.formatShares(shares)} 股)",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = TextSecondary,
-                            )
-                        }
                     }
-                }
-
-                Row {
-                    IconButton(onClick = { isChartExpanded = !isChartExpanded }) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.ShowChart,
-                            contentDescription = if (isChartExpanded) "收合 K 線圖" else "展開 K 線圖",
-                            tint = if (isChartExpanded) BrandSky else TextSecondary,
-                        )
-                    }
-                    IconButton(onClick = onEdit) {
-                        Icon(
-                            imageVector = Icons.Rounded.Edit,
-                            contentDescription = "編輯規則",
-                            tint = TextSecondary,
-                        )
-                    }
-                    IconButton(onClick = onDelete) {
-                        Icon(
-                            imageVector = Icons.Rounded.DeleteOutline,
-                            contentDescription = "刪除規則",
-                            tint = TextSecondary,
+                    item.estimatedShares?.let { shares ->
+                        Text(
+                            text = "約 ${Formatters.formatShares(shares)} 股",
+                            style = FinancialTextStyles.numericSmall,
+                            color = BrandSky,
+                            fontWeight = FontWeight.Medium,
                         )
                     }
                 }
@@ -699,6 +738,7 @@ private fun WatchlistRuleCard(
                     closeHistory = quote?.closeHistory.orEmpty(),
                     ruleCondition = rule.condition,
                     evaluation = eval,
+                    marginInfo = quote?.marginInfo,
                 )
             }
 

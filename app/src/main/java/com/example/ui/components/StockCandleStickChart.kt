@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -55,6 +56,7 @@ import com.example.domain.model.RsiCondition
 import com.example.ui.theme.AlertAmber
 import com.example.ui.theme.AlertAmberContainer
 import com.example.ui.theme.BrandSky
+import com.example.ui.theme.BrandSkyContainer
 import com.example.ui.theme.CanvasObsidian
 import com.example.ui.theme.FinancialTextStyles
 import com.example.ui.theme.HairlineBorder
@@ -85,6 +87,7 @@ fun StockCandleStickChart(
     closeHistory: List<Double>,
     ruleCondition: AlertCondition,
     evaluation: ConditionEvaluationResult?,
+    marginInfo: com.example.data.remote.StockMarginInfo? = null,
     modifier: Modifier = Modifier,
 ) {
     var selectedTimeframe by remember { mutableStateOf(ChartTimeframe.THREE_MONTHS) }
@@ -115,12 +118,87 @@ fun StockCandleStickChart(
         }
     }
 
-    // 計算警報條件防線
-    val alertMarkers = remember(ruleCondition, evaluation, closeHistory) {
-        extractAlertMarkers(ruleCondition, evaluation, closeHistory)
+// 計算警報條件防線與融資 130% 追繳防線
+    val alertMarkers = remember(ruleCondition, evaluation, closeHistory, currency, marginInfo) {
+        val list = extractAlertMarkers(ruleCondition, evaluation, closeHistory, currency).toMutableList()
+        // 若為台股且有融資資料/均線，將融資 130% 斷頭追繳線繪製於價格主圖
+        if (currency == MarketCurrency.TWD && closeHistory.size >= 20) {
+            val ma20 = com.example.domain.model.MovingAverageCalculator.calculateSma(closeHistory, 20)
+            if (ma20 != null && ma20 > 0.0) {
+                // 融資成本 = MA20，借款 6 成，130% 追繳價 = (MA20 * 0.6) * 1.3 = MA20 * 0.78
+                val marginCallPrice = ma20 * 0.78
+                val priceStr = Formatters.formatPrice(marginCallPrice, currency)
+                list.add(
+                    AlertMarker(
+                        label = "融資追繳 130% $priceStr",
+                        price = marginCallPrice,
+                        color = Color(0xFFF97316), // 亮橘色斷頭防線
+                    )
+                )
+            }
+        }
+        list
     }
 
-    // 計算特定均線之全歷史序列（若條件包含均線）
+    // 計算個股推估融資維持率歷史序列（依每日收盤價與當時 20MA 計算）
+    val estMarginSeries = remember(closeHistory, displayCandles, currency) {
+        if (currency != MarketCurrency.TWD || closeHistory.size < 20) emptyList()
+        else {
+            val totalLen = closeHistory.size
+            val displayLen = displayCandles.size
+            val startOffset = (totalLen - displayLen).coerceAtLeast(0)
+
+            val list = mutableListOf<Double?>()
+            for (i in startOffset until totalLen) {
+                if (i >= 19) {
+                    val sub = closeHistory.subList(0, i + 1)
+                    val priceAtI = closeHistory[i]
+                    list.add(com.example.domain.model.MovingAverageCalculator.calculateEstimatedMarginKeepRate(priceAtI, sub))
+                } else {
+                    list.add(null)
+                }
+            }
+            list
+        }
+    }
+    val marginCondition = remember(ruleCondition) {
+        when (ruleCondition) {
+            is com.example.domain.model.MarginMaintenanceCondition -> ruleCondition
+            is CompositeCondition -> ruleCondition.conditions.filterIsInstance<com.example.domain.model.MarginMaintenanceCondition>().firstOrNull()
+            else -> null
+        }
+    }
+
+    // 檢查條件中是否包含 RSI
+    val rsiCondition = remember(ruleCondition) {
+        when (ruleCondition) {
+            is RsiCondition -> ruleCondition
+            is CompositeCondition -> ruleCondition.conditions.filterIsInstance<RsiCondition>().firstOrNull()
+            else -> null
+        }
+    }
+
+    // 計算顯示區間的 RSI(14) 歷史序列
+    val rsiSeries = remember(closeHistory, displayCandles, rsiCondition) {
+        if (rsiCondition == null) emptyList()
+        else {
+            val period = rsiCondition.periodDays
+            val totalLen = closeHistory.size
+            val displayLen = displayCandles.size
+            val startOffset = (totalLen - displayLen).coerceAtLeast(0)
+
+            val list = mutableListOf<Double?>()
+            for (i in startOffset until totalLen) {
+                if (i >= period) {
+                    val sub = closeHistory.subList(0, i + 1)
+                    list.add(com.example.domain.model.MovingAverageCalculator.calculateRsi(sub, period))
+                } else {
+                    list.add(null)
+                }
+            }
+            list
+        }
+    }
     val maSeriesMap = remember(alertMarkers, closeHistory, displayCandles) {
         val result = mutableMapOf<Int, List<Double?>>()
         val totalLen = closeHistory.size
@@ -217,34 +295,66 @@ fun StockCandleStickChart(
                 }
             }
 
-            // 十字游標詳細資訊面板
+            // 十字游標詳細資訊面板（自適應兩欄排列，避免右側數值截斷）
             val activeCandle = selectedIndex?.let { displayCandles.getOrNull(it) }
                 ?: displayCandles.lastOrNull()
 
             if (activeCandle != null) {
                 val dateFormat = remember { SimpleDateFormat("yyyy/MM/dd", Locale.getDefault()) }
                 val dateStr = remember(activeCandle.timestamp) {
-                    if (activeCandle.timestamp > 0) dateFormat.format(Date(activeCandle.timestamp * 1000L.takeIf { activeCandle.timestamp < 10000000000L } ?: activeCandle.timestamp))
-                    else "--"
+                    val ts = activeCandle.timestamp
+                    if (ts > 0L) {
+                        val millis = if (ts < 10000000000L) ts * 1000L else ts
+                        dateFormat.format(Date(millis))
+                    } else "--"
                 }
                 val isUp = activeCandle.close >= activeCandle.open
                 val kColor = if (isUp) TaiwanRed else TaiwanGreen
 
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(SurfaceCardHigh.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
+                        .background(SurfaceCardHigh.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Text(
-                        text = dateStr,
-                        style = FinancialTextStyles.numericSmall,
-                        color = TextSecondary,
-                        fontSize = 11.sp,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // 第一行：日期與收盤價（高亮主要狀態）
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "日期：$dateStr",
+                            style = FinancialTextStyles.numericSmall,
+                            color = TextSecondary,
+                            fontSize = 12.sp,
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text(
+                                text = "收盤",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextSecondary,
+                                fontSize = 11.sp,
+                            )
+                            Text(
+                                text = Formatters.formatPrice(activeCandle.close, currency),
+                                style = FinancialTextStyles.numericSmall,
+                                color = kColor,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                            )
+                        }
+                    }
+                    // 第二行：開盤、最高、最低三項輔助數據平分展示
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         Text(
                             text = "開 ${Formatters.formatPrice(activeCandle.open, currency)}",
                             style = FinancialTextStyles.numericSmall,
@@ -261,13 +371,6 @@ fun StockCandleStickChart(
                             text = "低 ${Formatters.formatPrice(activeCandle.low, currency)}",
                             style = FinancialTextStyles.numericSmall,
                             color = TaiwanGreen,
-                            fontSize = 11.sp,
-                        )
-                        Text(
-                            text = "收 ${Formatters.formatPrice(activeCandle.close, currency)}",
-                            style = FinancialTextStyles.numericSmall,
-                            color = kColor,
-                            fontWeight = FontWeight.Bold,
                             fontSize = 11.sp,
                         )
                     }
@@ -317,6 +420,144 @@ fun StockCandleStickChart(
                         )
                     }
                 }
+
+                // 若包含 RSI 條件，自動滑出 60dp 專業 RSI 副圖與超賣/超買防線
+                if (rsiCondition != null && rsiSeries.isNotEmpty()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        val activeRsi = selectedIndex?.let { rsiSeries.getOrNull(it) }
+                            ?: rsiSeries.lastOrNull()
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Text(
+                                    text = "RSI(${rsiCondition.periodDays})",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = BrandSky,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                Text(
+                                    text = activeRsi?.let { String.format(Locale.US, "%.1f", it) } ?: "--",
+                                    style = FinancialTextStyles.numericSmall,
+                                    color = if ((activeRsi ?: 50.0) <= rsiCondition.threshold && !rsiCondition.isAbove) TaiwanGreen
+                                    else if ((activeRsi ?: 50.0) >= rsiCondition.threshold && rsiCondition.isAbove) TaiwanRed
+                                    else TextPrimary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                            }
+                            Text(
+                                text = "門檻：${if (rsiCondition.isAbove) "≥" else "≤"} ${rsiCondition.threshold.toInt()}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextMuted,
+                                fontSize = 10.sp,
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(60.dp)
+                        ) {
+                            Canvas(modifier = Modifier.fillMaxSize()) {
+                                drawRsiSubChart(
+                                    series = rsiSeries,
+                                    condition = rsiCondition,
+                                    selectedIndex = selectedIndex,
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // 若為台股且包含融資維持率條件或個股融資資訊，自動滑出 65dp 維持率副圖與走勢折線
+                val showMarginSubChart = marginCondition != null || (currency == MarketCurrency.TWD && estMarginSeries.isNotEmpty())
+                if (showMarginSubChart) {
+                    val activeEstRate = selectedIndex?.let { estMarginSeries.getOrNull(it) }
+                        ?: estMarginSeries.lastOrNull()
+                        ?: marginInfo?.estimatedKeepRate
+                    val marketKeepRate = evaluation?.targetReferencePrice
+                    val threshold = marginCondition?.let { if (it.isExitMode) it.exitThreshold else it.panicThreshold } ?: 130.0
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Text(
+                                    text = if (marginCondition != null) "全市場/個股維持率" else "個股推估維持率",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = AlertAmber,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                activeEstRate?.let { r ->
+                                    val rColor = if (r < 135.0) TaiwanRed else if (r < 150.0) AlertAmber else TaiwanGreen
+                                    Text(
+                                        text = "${String.format(Locale.US, "%.1f", r)}%",
+                                        style = FinancialTextStyles.numericSmall,
+                                        color = rColor,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                }
+                                if (marginCondition != null && marketKeepRate != null) {
+                                    Text(
+                                        text = "(大盤 ${String.format(Locale.US, "%.1f", marketKeepRate)}%)",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = TextSecondary,
+                                        fontSize = 10.sp,
+                                    )
+                                }
+                            }
+                            Text(
+                                text = if (marginCondition != null) {
+                                    if (marginCondition.isExitMode) "安全停泊門檻：≥ ${threshold.toInt()}%" else "恐慌抄底門檻：≤ ${threshold.toInt()}%"
+                                } else "追繳警戒線：130%",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextMuted,
+                                fontSize = 10.sp,
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(65.dp)
+                        ) {
+                            Canvas(modifier = Modifier.fillMaxSize()) {
+                                drawMarginSubChart(
+                                    series = estMarginSeries,
+                                    threshold = threshold,
+                                    selectedIndex = selectedIndex,
+                                    isExitMode = marginCondition?.isExitMode == true,
+                                )
+                            }
+                        }
+                    }
+                }
             } else {
                 Box(
                     modifier = Modifier
@@ -345,7 +586,7 @@ private fun DrawScope.drawCandleStickChart(
     val count = candles.size
     if (count == 0) return
 
-    val paddingRight = 60.dp.toPx()
+    val paddingRight = 72.dp.toPx()
     val chartWidth = size.width - paddingRight
     val chartHeight = size.height - 24.dp.toPx()
 
@@ -486,35 +727,36 @@ private fun DrawScope.drawCandleStickChart(
                     pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f),
                 )
 
-                // 右側醒目徽章背景與文字
-                val badgeWidth = paddingRight - 4f
-                val badgeHeight = 36f
+                val paint = android.graphics.Paint().apply {
+                    color = android.graphics.Color.WHITE
+                    textSize = 20f
+                    isAntiAlias = true
+                    typeface = android.graphics.Typeface.DEFAULT_BOLD
+                }
+                val text = marker.label
+                val textWidth = paint.measureText(text)
+                val badgeWidth = (textWidth + 16f).coerceAtLeast(paddingRight - 4f)
+                val badgeHeight = 32f
                 val badgeTop = (y - badgeHeight / 2f).coerceIn(0f, chartHeight - badgeHeight)
+                val badgeLeft = (size.width - badgeWidth - 2f).coerceAtLeast(chartWidth + 2f)
 
                 drawRoundRect(
-                    color = marker.color.copy(alpha = 0.2f),
-                    topLeft = Offset(chartWidth + 4f, badgeTop),
+                    color = marker.color.copy(alpha = 0.25f),
+                    topLeft = Offset(badgeLeft, badgeTop),
                     size = Size(badgeWidth, badgeHeight),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(6f, 6f),
                 )
 
                 drawRoundRect(
                     color = marker.color,
-                    topLeft = Offset(chartWidth + 4f, badgeTop),
+                    topLeft = Offset(badgeLeft, badgeTop),
                     size = Size(badgeWidth, badgeHeight),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(6f, 6f),
                     style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f),
                 )
 
                 drawContext.canvas.nativeCanvas.apply {
-                    val paint = android.graphics.Paint().apply {
-                        color = android.graphics.Color.WHITE
-                        textSize = 22f
-                        isAntiAlias = true
-                        typeface = android.graphics.Typeface.DEFAULT_BOLD
-                    }
-                    val text = marker.label
-                    drawText(text, chartWidth + 8f, badgeTop + 24f, paint)
+                    drawText(text, badgeLeft + 8f, badgeTop + 22f, paint)
                 }
             }
         }
@@ -553,10 +795,266 @@ private fun DrawScope.drawCandleStickChart(
     }
 }
 
+private fun DrawScope.drawRsiSubChart(
+    series: List<Double?>,
+    condition: RsiCondition,
+    selectedIndex: Int?,
+) {
+    val count = series.size
+    if (count == 0) return
+
+    val paddingRight = 72.dp.toPx()
+    val chartWidth = size.width - paddingRight
+    val chartHeight = size.height
+
+    fun rsiToY(rsi: Double): Float {
+        // RSI 固定 0 ~ 100 區間
+        return (chartHeight - (rsi.coerceIn(0.0, 100.0) / 100.0 * chartHeight)).toFloat()
+    }
+
+    // 1. 繪製 30 與 70 基準格線
+    val y30 = rsiToY(30.0)
+    val y70 = rsiToY(70.0)
+    val yThreshold = rsiToY(condition.threshold)
+
+    // 30 / 70 灰色參考虛線
+    drawLine(
+        color = HairlineBorder.copy(alpha = 0.5f),
+        start = Offset(0f, y70),
+        end = Offset(chartWidth, y70),
+        strokeWidth = 1f,
+        pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f), 0f),
+    )
+    drawLine(
+        color = HairlineBorder.copy(alpha = 0.5f),
+        start = Offset(0f, y30),
+        end = Offset(chartWidth, y30),
+        strokeWidth = 1f,
+        pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f), 0f),
+    )
+
+    // 2. 警報警戒防線（桃紅超賣線或亮橘超買線）
+    val alertColor = if (condition.isAbove) TaiwanRed else TaiwanGreen
+    drawLine(
+        color = alertColor,
+        start = Offset(0f, yThreshold),
+        end = Offset(chartWidth, yThreshold),
+        strokeWidth = 1.5f,
+        pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f), 0f),
+    )
+
+    // 警戒標籤
+    val alertBadgeTop = (yThreshold - 12f).coerceIn(0f, chartHeight - 24f)
+    drawRoundRect(
+        color = alertColor.copy(alpha = 0.2f),
+        topLeft = Offset(chartWidth + 4f, alertBadgeTop),
+        size = Size(paddingRight - 8f, 24f),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f, 4f),
+    )
+    drawRoundRect(
+        color = alertColor,
+        topLeft = Offset(chartWidth + 4f, alertBadgeTop),
+        size = Size(paddingRight - 8f, 24f),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f, 4f),
+        style = androidx.compose.ui.graphics.drawscope.Stroke(1f),
+    )
+    drawContext.canvas.nativeCanvas.apply {
+        val paint = android.graphics.Paint().apply {
+            color = android.graphics.Color.WHITE
+            textSize = 18f
+            isAntiAlias = true
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+        }
+        val label = "${if (condition.isAbove) "≥" else "≤"} ${condition.threshold.toInt()}"
+        drawText(label, chartWidth + 8f, alertBadgeTop + 17f, paint)
+    }
+
+    // 3. 繪製 RSI 連續平滑折線
+    val slotWidth = chartWidth / count
+    val rsiPath = Path()
+    var hasStarted = false
+
+    series.forEachIndexed { idx, rsiVal ->
+        if (rsiVal != null) {
+            val x = idx * slotWidth + slotWidth / 2f
+            val y = rsiToY(rsiVal)
+            if (!hasStarted) {
+                rsiPath.moveTo(x, y)
+                hasStarted = true
+            } else {
+                rsiPath.lineTo(x, y)
+            }
+        }
+    }
+
+    if (hasStarted) {
+        drawPath(
+            path = rsiPath,
+            color = Color(0xFFA855F7), // 紫色 RSI 線
+            style = androidx.compose.ui.graphics.drawscope.Stroke(
+                width = 2f,
+                pathEffect = PathEffect.cornerPathEffect(3f)
+            ),
+        )
+    }
+
+    // 4. 十字游標連動
+    if (selectedIndex != null && selectedIndex in 0 until count) {
+        val rsiVal = series[selectedIndex]
+        val xCenter = selectedIndex * slotWidth + slotWidth / 2f
+        // 垂直虛線
+        drawLine(
+            color = Color.White.copy(alpha = 0.4f),
+            start = Offset(xCenter, 0f),
+            end = Offset(xCenter, chartHeight),
+            strokeWidth = 1f,
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f), 0f),
+        )
+        if (rsiVal != null) {
+            val rsiY = rsiToY(rsiVal)
+            drawCircle(
+                color = Color(0xFFA855F7),
+                radius = 3.dp.toPx(),
+                center = Offset(xCenter, rsiY),
+            )
+        }
+    }
+}
+
+private fun DrawScope.drawMarginSubChart(
+    series: List<Double?>,
+    threshold: Double,
+    selectedIndex: Int?,
+    isExitMode: Boolean,
+) {
+    val paddingRight = 72.dp.toPx()
+    val chartWidth = size.width - paddingRight
+    val chartHeight = size.height
+
+    // 融資維持率常態觀察區間 110% ~ 190%
+    fun rateToY(rate: Double): Float {
+        val minRate = 110.0
+        val maxRate = 190.0
+        val clamped = rate.coerceIn(minRate, maxRate)
+        return (chartHeight - ((clamped - minRate) / (maxRate - minRate) * chartHeight)).toFloat()
+    }
+
+    val y130 = rateToY(130.0)
+    val y160 = rateToY(160.0)
+    val yThreshold = rateToY(threshold)
+
+    // 1. 繪製 130% 斷頭追繳與 160% 正常水平參考線
+    drawLine(
+        color = TaiwanRed.copy(alpha = 0.5f),
+        start = Offset(0f, y130),
+        end = Offset(chartWidth, y130),
+        strokeWidth = 1.2f,
+        pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f), 0f),
+    )
+    drawLine(
+        color = HairlineBorder.copy(alpha = 0.5f),
+        start = Offset(0f, y160),
+        end = Offset(chartWidth, y160),
+        strokeWidth = 1f,
+        pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f), 0f),
+    )
+
+    // 2. 警報門檻防線（警戒線）
+    val thresholdColor = if (isExitMode) TaiwanGreen else AlertAmber
+    drawLine(
+        color = thresholdColor,
+        start = Offset(0f, yThreshold),
+        end = Offset(chartWidth, yThreshold),
+        strokeWidth = 1.5f,
+        pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f), 0f),
+    )
+
+    // 門檻右側標籤
+    val badgeTop = (yThreshold - 12f).coerceIn(0f, chartHeight - 24f)
+    drawRoundRect(
+        color = thresholdColor.copy(alpha = 0.2f),
+        topLeft = Offset(chartWidth + 4f, badgeTop),
+        size = Size(paddingRight - 8f, 24f),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f, 4f),
+    )
+    drawRoundRect(
+        color = thresholdColor,
+        topLeft = Offset(chartWidth + 4f, badgeTop),
+        size = Size(paddingRight - 8f, 24f),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f, 4f),
+        style = androidx.compose.ui.graphics.drawscope.Stroke(1f),
+    )
+    drawContext.canvas.nativeCanvas.apply {
+        val paint = android.graphics.Paint().apply {
+            color = android.graphics.Color.WHITE
+            textSize = 17f
+            isAntiAlias = true
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+        }
+        val label = "門檻 ${threshold.toInt()}%"
+        drawText(label, chartWidth + 6f, badgeTop + 17f, paint)
+    }
+
+    // 3. 繪製個股推估維持率連續折線
+    val count = series.size
+    if (count > 0) {
+        val slotWidth = chartWidth / count
+        val marginPath = Path()
+        var hasStarted = false
+
+        series.forEachIndexed { idx, rateVal ->
+            if (rateVal != null) {
+                val x = idx * slotWidth + slotWidth / 2f
+                val y = rateToY(rateVal)
+                if (!hasStarted) {
+                    marginPath.moveTo(x, y)
+                    hasStarted = true
+                } else {
+                    marginPath.lineTo(x, y)
+                }
+            }
+        }
+
+        if (hasStarted) {
+            drawPath(
+                path = marginPath,
+                color = AlertAmber, // 琥珀橙色維持率曲線
+                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                    width = 2f,
+                    pathEffect = PathEffect.cornerPathEffect(3f)
+                ),
+            )
+        }
+
+        // 4. 十字游標連動
+        if (selectedIndex != null && selectedIndex in 0 until count) {
+            val rVal = series[selectedIndex]
+            val xCenter = selectedIndex * slotWidth + slotWidth / 2f
+            drawLine(
+                color = Color.White.copy(alpha = 0.4f),
+                start = Offset(xCenter, 0f),
+                end = Offset(xCenter, chartHeight),
+                strokeWidth = 1f,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f), 0f),
+            )
+            if (rVal != null) {
+                val rY = rateToY(rVal)
+                val dotColor = if (rVal < 135.0) TaiwanRed else if (rVal < 150.0) AlertAmber else TaiwanGreen
+                drawCircle(
+                    color = dotColor,
+                    radius = 3.5.dp.toPx(),
+                    center = Offset(xCenter, rY),
+                )
+            }
+        }
+    }
+}
+
 private fun extractAlertMarkers(
     ruleCondition: AlertCondition,
     evaluation: ConditionEvaluationResult?,
     closeHistory: List<Double>,
+    currency: MarketCurrency,
 ): List<AlertMarker> {
     val markers = mutableListOf<AlertMarker>()
 
@@ -566,9 +1064,10 @@ private fun extractAlertMarkers(
                 val targetPrice = evaluation?.targetReferencePrice
                     ?: com.example.domain.model.MovingAverageCalculator.calculateSma(closeHistory, cond.periodDays)
                 if (targetPrice != null && targetPrice > 0.0) {
+                    val priceStr = Formatters.formatPrice(targetPrice, currency)
                     markers.add(
                         AlertMarker(
-                            label = "${cond.periodDays}MA",
+                            label = "${cond.periodDays}MA $priceStr",
                             price = targetPrice,
                             color = AlertAmber,
                             periodDays = cond.periodDays,
@@ -578,9 +1077,10 @@ private fun extractAlertMarkers(
             }
             is PriceTargetCondition -> {
                 val dirSymbol = if (cond.direction == com.example.domain.model.PriceTargetDirection.BELOW_OR_EQUAL) "≤" else "≥"
+                val priceStr = Formatters.formatPrice(cond.targetPrice, currency)
                 markers.add(
                     AlertMarker(
-                        label = "目標 $dirSymbol",
+                        label = "$dirSymbol $priceStr",
                         price = cond.targetPrice,
                         color = Color(0xFF38BDF8), // 亮天藍
                     )
@@ -589,9 +1089,10 @@ private fun extractAlertMarkers(
             is PeakDrawdownCondition -> {
                 val targetPrice = evaluation?.targetReferencePrice
                 if (targetPrice != null && targetPrice > 0.0) {
+                    val priceStr = Formatters.formatPrice(targetPrice, currency)
                     markers.add(
                         AlertMarker(
-                            label = "-${cond.drawdownPercent.toInt()}%",
+                            label = "-${cond.drawdownPercent.toInt()}% $priceStr",
                             price = targetPrice,
                             color = Color(0xFFF43F5E), // 桃紅抄底線
                         )
