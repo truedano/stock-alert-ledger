@@ -158,10 +158,13 @@ class MainActivity : ComponentActivity() {
 
     private fun handleNotificationIntent(intent: Intent?) {
         val prefill = StockNotificationHelper.parseQuickBuyPrefill(this, intent) ?: return
+        val notificationId = intent?.getIntExtra(StockNotificationHelper.EXTRA_NOTIFICATION_ID, -1) ?: -1
+        StockNotificationHelper.cancelNotification(this, notificationId)
         viewModel.openQuickBuyFromNotification(prefill)
         // Clear flag and token so configuration changes do not re-open unexpectedly
         intent?.removeExtra(StockNotificationHelper.EXTRA_OPEN_QUICK_BUY)
         intent?.removeExtra(StockNotificationHelper.EXTRA_INTERNAL_TOKEN)
+        intent?.removeExtra(StockNotificationHelper.EXTRA_NOTIFICATION_ID)
         intent?.action = null
     }
 }

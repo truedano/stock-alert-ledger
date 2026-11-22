@@ -7,8 +7,10 @@ import com.example.domain.model.MarketCurrency
 import com.example.notification.QuickBuyPrefill
 import com.example.notification.StockNotificationHelper
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -77,5 +79,76 @@ class ExampleRobolectricTest {
             putExtra(StockNotificationHelper.EXTRA_PRICE, Double.NaN)
         }
         assertNull(StockNotificationHelper.parseQuickBuyPrefill(context, validIntentWithBadPrice))
+    }
+
+    @Test
+    fun `alert notification includes quick buy and pause actions when ruleId is present`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val prefill = QuickBuyPrefill(
+            ruleId = 15L,
+            symbol = "2330.TW",
+            displaySymbol = "2330.TW",
+            name = "台積電",
+            currency = MarketCurrency.TWD,
+            unitPrice = 1000.0,
+            plannedAmount = 20000.0,
+            triggerTag = "月線 20MA",
+        )
+        val notification = StockNotificationHelper.buildAlertNotification(
+            context = context,
+            notificationId = StockNotificationHelper.computeNotificationId(15L),
+            title = "測試標題",
+            body = "測試內容",
+            prefill = prefill,
+        )
+
+        assertNotNull(notification.actions)
+        assertEquals(2, notification.actions.size)
+        assertEquals("快速記帳", notification.actions[0].title.toString())
+        assertEquals("暫停監控", notification.actions[1].title.toString())
+    }
+
+    @Test
+    fun `test notification includes quick buy and dismiss actions when ruleId is null`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val prefill = QuickBuyPrefill(
+            ruleId = null,
+            symbol = "2330.TW",
+            displaySymbol = "2330.TW",
+            name = "台積電 (測試)",
+            currency = MarketCurrency.TWD,
+            unitPrice = 1015.0,
+            plannedAmount = 30000.0,
+            triggerTag = "觸及 20MA",
+        )
+        val notification = StockNotificationHelper.buildAlertNotification(
+            context = context,
+            notificationId = StockNotificationHelper.TEST_NOTIFICATION_ID,
+            title = "測試標題",
+            body = "測試內容",
+            prefill = prefill,
+        )
+
+        assertNotNull(notification.actions)
+        assertEquals(2, notification.actions.size)
+        assertEquals("快速記帳", notification.actions[0].title.toString())
+        assertEquals("關閉通知", notification.actions[1].title.toString())
+    }
+
+    @Test
+    fun `pause and dismiss notification intents carry valid internal token`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val pauseIntent = StockNotificationHelper.buildPauseRuleIntent(context, ruleId = 7L, notificationId = 107)
+        val dismissIntent = StockNotificationHelper.buildDismissNotificationIntent(context, notificationId = 9991)
+        val forgedIntent = Intent(StockNotificationHelper.ACTION_PAUSE_RULE_FROM_NOTIFICATION).apply {
+            putExtra(StockNotificationHelper.EXTRA_INTERNAL_TOKEN, "bad-token")
+            putExtra(StockNotificationHelper.EXTRA_RULE_ID, 7L)
+        }
+
+        assertTrue(StockNotificationHelper.isInternalTokenValid(context, pauseIntent))
+        assertEquals(7L, pauseIntent.getLongExtra(StockNotificationHelper.EXTRA_RULE_ID, -1L))
+        assertEquals(107, pauseIntent.getIntExtra(StockNotificationHelper.EXTRA_NOTIFICATION_ID, -1))
+        assertTrue(StockNotificationHelper.isInternalTokenValid(context, dismissIntent))
+        assertFalse(StockNotificationHelper.isInternalTokenValid(context, forgedIntent))
     }
 }

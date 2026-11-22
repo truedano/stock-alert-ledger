@@ -46,6 +46,11 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <!-- Notification Action Receiver (background pause / dismiss) -->
+        <receiver
+            android:name=".notification.NotificationActionReceiver"
+            android:exported="false" />
+
         <!-- Home Screen App Widget -->
         <receiver
             android:name=".widget.StockMonitorWidgetProvider"
