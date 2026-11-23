@@ -8,13 +8,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.NotificationsActive
@@ -42,6 +40,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.toColorInt
 import com.example.domain.model.AlertCondition
 import com.example.domain.model.CandleStickData
 import com.example.domain.model.ChartTimeframe
@@ -54,10 +53,8 @@ import com.example.domain.model.PeakDrawdownCondition
 import com.example.domain.model.PriceTargetCondition
 import com.example.domain.model.RsiCondition
 import com.example.ui.theme.AlertAmber
-import com.example.ui.theme.AlertAmberContainer
 import com.example.ui.theme.BrandSky
 import com.example.ui.theme.BrandSkyContainer
-import com.example.ui.theme.CanvasObsidian
 import com.example.ui.theme.FinancialTextStyles
 import com.example.ui.theme.HairlineBorder
 import com.example.ui.theme.SurfaceCard
@@ -81,23 +78,20 @@ data class AlertMarker(
 
 @Composable
 fun StockCandleStickChart(
-    symbol: String,
     currency: MarketCurrency,
     candleHistory: List<CandleStickData>,
     closeHistory: List<Double>,
     ruleCondition: AlertCondition,
     evaluation: ConditionEvaluationResult?,
-    marginInfo: com.example.data.remote.StockMarginInfo? = null,
     modifier: Modifier = Modifier,
+    marginInfo: com.example.data.remote.StockMarginInfo? = null,
 ) {
     var selectedTimeframe by remember { mutableStateOf(ChartTimeframe.THREE_MONTHS) }
     var selectedIndex by remember { mutableStateOf<Int?>(null) }
 
     // 根據選取天數裁切顯示資料
     val displayCandles = remember(candleHistory, closeHistory, selectedTimeframe) {
-        val baseCandles = if (candleHistory.isNotEmpty()) {
-            candleHistory
-        } else {
+        val baseCandles = candleHistory.ifEmpty {
             // 若歷史資料僅有 closeHistory，自動合成單純收盤價蠟燭
             closeHistory.mapIndexed { idx, c ->
                 val prev = if (idx > 0) closeHistory[idx - 1] else c
@@ -239,7 +233,7 @@ fun StockCandleStickChart(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    ChartTimeframe.values().forEach { tf ->
+                    ChartTimeframe.entries.forEach { tf ->
                         val isSelected = tf == selectedTimeframe
                         FilterChip(
                             selected = isSelected,
@@ -632,7 +626,7 @@ private fun DrawScope.drawCandleStickChart(
         // 刻度文字
         drawContext.canvas.nativeCanvas.apply {
             val textPaint = android.graphics.Paint().apply {
-                color = android.graphics.Color.parseColor("#64748B")
+                color = "#64748B".toColorInt()
                 textSize = 26f
                 isAntiAlias = true
             }

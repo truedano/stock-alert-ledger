@@ -850,7 +850,6 @@ private fun WatchlistRuleCard(
             // 摺疊/展開 K 線圖與警報防線
             if (isChartExpanded) {
                 com.example.ui.components.StockCandleStickChart(
-                    symbol = rule.displaySymbol,
                     currency = rule.currency,
                     candleHistory = quote?.candleHistory.orEmpty(),
                     closeHistory = quote?.closeHistory.orEmpty(),
