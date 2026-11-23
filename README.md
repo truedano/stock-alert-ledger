@@ -15,7 +15,12 @@
 
 ### ✨ 核心功能
 
-1. **台指期大台法人留倉與散戶多空比籌碼看板、全螢幕警報中心與自選分類標籤（v1.10.0+）**
+1. **期交所台指期盤後籌碼抓取升級、智慧快取與台股配色顯示（v1.11.0+）**
+   - **期交所官網盤後 CSV 優先與 OpenAPI 雙重備援**：改為優先抓取台灣期貨交易所官網 MS950/Big5 盤後 CSV（含小台/微台全市場未平倉與三大法人未平倉），精準計算外資大台未平倉日增減口數；若最新交易日盤後法人資料尚未公布則自動回退前一交易日以對齊未平倉分母，官網異常時自動降級回 TAIFEX OpenAPI。
+   - **30 分鐘快取與獨立響應式更新**：內建 30 分鐘記憶體快取與手動強制刷新支援，並透過 `StateFlow` 響應式資料流與融資維持率條件解耦，確保進入 App、手動刷新及定期更新流程皆能獨立同步籌碼資料且避免重複請求。
+   - **台股紅多綠空視覺升級與盤後標示**：外資淨未平倉與小台/微台散戶多空比改採台股「紅多綠空」獨立著色，介面同步顯示外資未平倉日增減口數、資料日盤後標示與約 15:15 盤後公布時機說明，籌碼解讀更直覺。
+
+2. **台指期大台法人留倉與散戶多空比籌碼看板、全螢幕警報中心與自選分類標籤（v1.10.0+）**
    - **期交所台指期法人未平倉與散戶多空比指標**：即時爬取台灣期貨交易所 Open API（三大法人期貨未平倉部位與每日市場行情），精準計算外資淨未平倉（大台 OI）以及小台/微台散戶淨留倉與「散戶多空比」逆向籌碼指標；並於宏觀情緒看板中提供摺疊子卡與指標判讀指引，快速判別外資動向與散戶軋空/殺多氛圍。
    - **全螢幕警報歷史中心 (Alert History Center)**：將歷史紀錄升級為獨立全螢幕頁面（整合頂部 TopAppBar、返回導航與滑動列表），支援標的 FilterChip 即時過濾、清空歷史記錄二次確認對話框，大幅提升長列表閱讀與管理體驗。
    - **自選監控清單類別與狀態快速篩選列**：自選股主頁面頂部新增分類標籤（全部、台股、美股、指數）與狀態標籤（已觸發、監控中、已停用），支援即時橫向滑動與快速聚焦篩選目標標的。
@@ -121,7 +126,12 @@
 
 ### ✨ Key Features
 
-1. **Taiwan Index Futures Institutional OI & Retail Sentiment Gauges, Full-Screen Alert History & Watchlist Filter Tabs (v1.10.0+)**
+1. **Upgraded TAIFEX Post-Market Futures Chip Scraper, Smart Caching & Taiwan Color Styling (v1.11.0+)**
+   - **TAIFEX Official CSV Priority with OpenAPI Fallback**: Prioritizes Taiwan Futures Exchange (TAIFEX) official MS950/Big5 post-market CSV reports (Mini-TX/Micro-TX market total OI and institutional OI) to calculate daily changes in Foreign Institutional TX net OI. Automatically falls back one trading day if today's institutional report is not yet published so the OI denominator stays aligned, and degrades gracefully to TAIFEX OpenAPI if official CSV endpoints fail.
+   - **30-Minute Memory Cache & Independent Reactive Updates**: Introduces a 30-minute in-memory cache with force-refresh support, exposed via reactive `StateFlow` and decoupled from margin maintenance conditions so futures chip data updates independently on app launch, manual refresh, and periodic real-data syncs without redundant requests.
+   - **Taiwan Red-Bullish / Green-Bearish Visuals & Settlement Timestamp**: Applies Taiwan market color conventions (red bullish / green bearish) separately to Foreign net OI and Mini-TX/Micro-TX retail long/short ratios, alongside daily Foreign OI delta, settlement date labels, and post-market (~15:15) publication notes.
+
+2. **Taiwan Index Futures Institutional OI & Retail Sentiment Gauges, Full-Screen Alert History & Watchlist Filter Tabs (v1.10.0+)**
    - **TAIFEX Institutional Futures OI & Retail Long/Short Ratio**: Fetches real-time open interest and daily market reports from Taiwan Futures Exchange (TAIFEX) Open API, calculating Foreign Institutional net open contracts (TX OI) and Mini-TX / Micro-TX retail net positions & "Retail Long/Short Ratio" sentiment indicators; integrated into the macro sentiment banner with interactive explainers.
    - **Full-Screen Alert History Center**: Upgrades alert history from a basic dialog into a dedicated full-screen page featuring TopAppBar navigation, symbol filter chips, and clear confirmation dialog for fluid log management.
    - **Watchlist Category & Status Quick-Filter Chips**: Adds quick filter chips to the watchlist (All, Taiwan, US, Indices) along with rule status (Triggered, Monitoring, Disabled) for rapid target filtering and clutter-free organization.
