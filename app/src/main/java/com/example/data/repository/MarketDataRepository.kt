@@ -26,6 +26,9 @@ import com.example.notification.StockNotificationHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 
 class MarketDataRepository(
@@ -48,7 +51,8 @@ class MarketDataRepository(
     private var latestMarginSnapshot: com.example.data.remote.MarketMarginSnapshot? = null
     private var stockMarginCache: Map<String, com.example.data.remote.StockMarginInfo> = emptyMap()
     private var latestFearAndGreed: com.example.domain.model.FearAndGreedData? = null
-    private var latestFuturesChipSnapshot: TaiwanFuturesChipSnapshot? = null
+    private val _futuresChipFlow = MutableStateFlow<TaiwanFuturesChipSnapshot?>(null)
+    val futuresChipFlow: StateFlow<TaiwanFuturesChipSnapshot?> = _futuresChipFlow.asStateFlow()
 
     suspend fun fetchFearAndGreed(forceRefresh: Boolean = false): com.example.domain.model.FearAndGreedData? = withContext(Dispatchers.IO) {
         val data = fearAndGreedService.fetchFearAndGreed(forceRefresh)
@@ -70,15 +74,15 @@ class MarketDataRepository(
 
     fun getLatestMarginSnapshot(): com.example.data.remote.MarketMarginSnapshot? = latestMarginSnapshot
 
-    suspend fun fetchTaifexFuturesSnapshot(): TaiwanFuturesChipSnapshot? = withContext(Dispatchers.IO) {
-        val snap = taifexFuturesService.fetchFuturesChipSnapshot()
+    suspend fun fetchTaifexFuturesSnapshot(forceRefresh: Boolean = false): TaiwanFuturesChipSnapshot? = withContext(Dispatchers.IO) {
+        val snap = taifexFuturesService.fetchFuturesChipSnapshot(forceRefresh = forceRefresh)
         if (snap != null) {
-            latestFuturesChipSnapshot = snap
+            _futuresChipFlow.value = snap
         }
-        snap ?: latestFuturesChipSnapshot
+        snap ?: _futuresChipFlow.value
     }
 
-    fun getLatestFuturesChipSnapshot(): TaiwanFuturesChipSnapshot? = latestFuturesChipSnapshot
+    fun getLatestFuturesChipSnapshot(): TaiwanFuturesChipSnapshot? = _futuresChipFlow.value
 
     suspend fun fetchAllStockMargins(): Map<String, com.example.data.remote.StockMarginInfo> = withContext(Dispatchers.IO) {
         val margins = twseMarginService.fetchAllStockMargins()
@@ -252,10 +256,15 @@ class MarketDataRepository(
                 }
             }
 
-            // 更新美股恐懼與貪婪指數（在真實數據模式下執行，內部有 1 小時快取保護）
+            // 更新美股恐懼與貪婪指數＆台指期籌碼（在真實數據模式下執行，各自內建快取保護）
             if (prefs.dataSourceMode == DataSourceMode.REAL) {
                 try {
                     fetchFearAndGreed(forceRefresh = false)
+                } catch (_: Exception) {
+                    // non-fatal
+                }
+                try {
+                    fetchTaifexFuturesSnapshot(forceRefresh = false)
                 } catch (_: Exception) {
                     // non-fatal
                 }

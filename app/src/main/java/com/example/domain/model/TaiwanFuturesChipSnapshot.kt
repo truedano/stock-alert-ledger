@@ -12,4 +12,25 @@ data class TaiwanFuturesChipSnapshot(
     val tmfRetailNetOi: Long,
     val tmfTotalOi: Long,
     val tmfRetailRatio: Double?,
-)
+    val foreignTxOiChange: Long? = null,
+) {
+    val shortDateLabel: String
+        get() {
+            val digits = date.filter { it.isDigit() }
+            return if (digits.length == 8) {
+                "${digits.substring(4, 6)}/${digits.substring(6, 8)}"
+            } else {
+                date
+            }
+        }
+
+    val formattedDate: String
+        get() {
+            val digits = date.filter { it.isDigit() }
+            return if (digits.length == 8) {
+                "${digits.substring(0, 4)}/${digits.substring(4, 6)}/${digits.substring(6, 8)}"
+            } else {
+                date
+            }
+        }
+}

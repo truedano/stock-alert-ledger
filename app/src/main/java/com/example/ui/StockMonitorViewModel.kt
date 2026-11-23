@@ -141,10 +141,9 @@ class StockMonitorViewModel(
 
     private val _marginSnapshotFlow = MutableStateFlow<com.example.data.remote.MarketMarginSnapshot?>(null)
     private val _fearAndGreedFlow = MutableStateFlow<com.example.domain.model.FearAndGreedData?>(null)
-    private val _futuresChipFlow = MutableStateFlow<com.example.domain.model.TaiwanFuturesChipSnapshot?>(null)
 
     init {
-        // 進入 App 時背景非同步抓取全市場維持率與恐懼貪婪指數
+        // 進入 App 時背景非同步抓取恐懼貪婪指數、台指期籌碼與全市場維持率
         viewModelScope.launch {
             try {
                 val fng = marketRepo.fetchFearAndGreed(forceRefresh = false)
@@ -160,9 +159,13 @@ class StockMonitorViewModel(
                 if (needsMargin) {
                     val snap = marketRepo.fetchTwseMarginSnapshot()
                     _marginSnapshotFlow.value = snap
-                    val futures = marketRepo.fetchTaifexFuturesSnapshot()
-                    _futuresChipFlow.value = futures
                 }
+            } catch (_: Exception) {
+            }
+        }
+        viewModelScope.launch {
+            try {
+                marketRepo.fetchTaifexFuturesSnapshot(forceRefresh = false)
             } catch (_: Exception) {
             }
         }
@@ -182,7 +185,7 @@ class StockMonitorViewModel(
         Triple(state, alertLogs, marginSnap)
     }.combine(_fearAndGreedFlow) { (state, alertLogs, marginSnap), fngData ->
         Pair(Triple(state, alertLogs, marginSnap), fngData)
-    }.combine(_futuresChipFlow) { (triple, fngData), futuresChip ->
+    }.combine(marketRepo.futuresChipFlow) { (triple, fngData), futuresChip ->
         val (state, alertLogs, marginSnap) = triple
         val (rules, cachedQuotes, prefs, refreshing, rateWarning) = state
         val quoteMap = cachedQuotes.associate { it.symbol to marketRepo.attachMarginInfo(it.toStockQuote()) }
@@ -355,7 +358,7 @@ class StockMonitorViewModel(
         viewModelScope.launch {
             _isRefreshing.value = true
             try {
-                // 手動整理時同時更新恐懼與貪婪指數
+                // 手動整理時同時更新恐懼與貪婪指數與台指期籌碼
                 try {
                     val fng = marketRepo.fetchFearAndGreed(forceRefresh = true)
                     if (fng != null) {
@@ -363,7 +366,11 @@ class StockMonitorViewModel(
                     }
                 } catch (_: Exception) {
                 }
-                // 僅在有設定維持率條件或台股標的時同步更新
+                try {
+                    marketRepo.fetchTaifexFuturesSnapshot(forceRefresh = true)
+                } catch (_: Exception) {
+                }
+                // 僅在有設定維持率條件或台股標的時同步更新融資維持率
                 val rules = marketRepo.getEnabledRulesSnapshot()
                 val needsMargin = rules.any {
                     it.condition is com.example.domain.model.MarginMaintenanceCondition ||
@@ -373,10 +380,6 @@ class StockMonitorViewModel(
                     val snap = marketRepo.fetchTwseMarginSnapshot()
                     if (snap != null) {
                         _marginSnapshotFlow.value = snap
-                    }
-                    val futures = marketRepo.fetchTaifexFuturesSnapshot()
-                    if (futures != null) {
-                        _futuresChipFlow.value = futures
                     }
                 }
                 val summary = marketRepo.refreshAllEnabledRules(sendNotifications = sendNotifications)

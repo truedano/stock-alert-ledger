@@ -40,8 +40,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.example.domain.model.DataSourceMode
 import com.example.domain.model.Formatters
@@ -679,10 +682,45 @@ private fun TaiwanFuturesChipStrip(
     data: com.example.domain.model.TaiwanFuturesChipSnapshot,
     modifier: Modifier = Modifier,
 ) {
-    val foreignColor = if (data.foreignTxNetOi >= 0L) TaiwanGreen else TaiwanRed
+    // 採台股紅多綠空慣例
+    val foreignColor = when {
+        data.foreignTxNetOi > 0L -> TaiwanRed
+        data.foreignTxNetOi < 0L -> TaiwanGreen
+        else -> TextSecondary
+    }
     val foreignSign = if (data.foreignTxNetOi > 0L) "+" else ""
-    val tradingDeltaSign = if (data.foreignTxTradingNet > 0L) "+" else ""
     val nf = remember { java.text.NumberFormat.getIntegerInstance(java.util.Locale.US) }
+    val deltaText = if (data.foreignTxOiChange != null) {
+        val sign = if (data.foreignTxOiChange > 0L) "+" else ""
+        "(日 $sign${nf.format(data.foreignTxOiChange)})"
+    } else {
+        val sign = if (data.foreignTxTradingNet > 0L) "+" else ""
+        "(交易 $sign${nf.format(data.foreignTxTradingNet)})"
+    }
+
+    fun ratioColor(ratio: Double?): Color = when {
+        ratio == null -> TextPrimary
+        ratio > 0.0 -> TaiwanRed
+        ratio < 0.0 -> TaiwanGreen
+        else -> TextSecondary
+    }
+
+    val mtxStr = data.mtxRetailRatio?.let { String.format(java.util.Locale.US, "%+.1f%%", it) } ?: "--"
+    val tmfStr = data.tmfRetailRatio?.let { String.format(java.util.Locale.US, "%+.1f%%", it) } ?: "--"
+    val retailAnnotated = buildAnnotatedString {
+        withStyle(SpanStyle(color = TextSecondary, fontWeight = FontWeight.Normal)) {
+            append("小台 ")
+        }
+        withStyle(SpanStyle(color = ratioColor(data.mtxRetailRatio), fontWeight = FontWeight.Bold)) {
+            append(mtxStr)
+        }
+        withStyle(SpanStyle(color = TextSecondary, fontWeight = FontWeight.Normal)) {
+            append(" · 微台 ")
+        }
+        withStyle(SpanStyle(color = ratioColor(data.tmfRetailRatio), fontWeight = FontWeight.Bold)) {
+            append(tmfStr)
+        }
+    }
 
     Surface(
         shape = RoundedCornerShape(10.dp),
@@ -690,70 +728,87 @@ private fun TaiwanFuturesChipStrip(
         border = BorderStroke(1.dp, HairlineBorder),
         modifier = modifier.fillMaxWidth(),
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 10.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Column(modifier = Modifier.weight(1f)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
-                    text = "外資台指期未平倉",
+                    text = "期交所盤後籌碼",
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontSize = androidx.compose.ui.unit.TextUnit(10f, androidx.compose.ui.unit.TextUnitType.Sp),
                     ),
-                    color = TextSecondary,
+                    color = TextMuted,
                 )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
+                Text(
+                    text = "${data.shortDateLabel} 盤後",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = androidx.compose.ui.unit.TextUnit(10f, androidx.compose.ui.unit.TextUnitType.Sp),
+                    ),
+                    color = BrandSky.copy(alpha = 0.85f),
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "$foreignSign${nf.format(data.foreignTxNetOi)} 口",
-                        style = FinancialTextStyles.numericSmall,
-                        color = foreignColor,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                    )
-                    Text(
-                        text = "(${tradingDeltaSign}${nf.format(data.foreignTxTradingNet)})",
+                        text = "外資台指期未平倉",
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontSize = androidx.compose.ui.unit.TextUnit(10f, androidx.compose.ui.unit.TextUnitType.Sp),
                         ),
-                        color = TextMuted,
+                        color = TextSecondary,
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = "$foreignSign${nf.format(data.foreignTxNetOi)} 口",
+                            style = FinancialTextStyles.numericSmall,
+                            color = foreignColor,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                        )
+                        Text(
+                            text = deltaText,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = androidx.compose.ui.unit.TextUnit(10f, androidx.compose.ui.unit.TextUnitType.Sp),
+                            ),
+                            color = TextMuted,
+                            maxLines = 1,
+                        )
+                    }
+                }
+
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.End,
+                ) {
+                    Text(
+                        text = "散戶多空比 (小台/微台)",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = androidx.compose.ui.unit.TextUnit(10f, androidx.compose.ui.unit.TextUnitType.Sp),
+                        ),
+                        color = TextSecondary,
+                    )
+                    Text(
+                        text = retailAnnotated,
+                        style = FinancialTextStyles.numericSmall,
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
-            }
-
-            Column(
-                modifier = Modifier.weight(1f),
-                horizontalAlignment = Alignment.End,
-            ) {
-                Text(
-                    text = "散戶多空比 (小台/微台)",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = androidx.compose.ui.unit.TextUnit(10f, androidx.compose.ui.unit.TextUnitType.Sp),
-                    ),
-                    color = TextSecondary,
-                )
-                val mtxStr = data.mtxRetailRatio?.let { String.format(java.util.Locale.US, "%+.1f%%", it) } ?: "--"
-                val tmfStr = data.tmfRetailRatio?.let { String.format(java.util.Locale.US, "%+.1f%%", it) } ?: "--"
-                val mtxColor = when {
-                    data.mtxRetailRatio == null -> TextPrimary
-                    data.mtxRetailRatio >= 15.0 -> TaiwanRed
-                    data.mtxRetailRatio <= -15.0 -> TaiwanGreen
-                    else -> AlertAmber
-                }
-                Text(
-                    text = "小台 $mtxStr · 微台 $tmfStr",
-                    style = FinancialTextStyles.numericSmall,
-                    color = mtxColor,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
             }
         }
     }
@@ -818,11 +873,16 @@ private fun MacroSentimentExplainDialog(
                     val nf = java.text.NumberFormat.getIntegerInstance(java.util.Locale.US)
                     val mtxRatioStr = futuresChip.mtxRetailRatio?.let { String.format(java.util.Locale.US, "%+.2f%%", it) } ?: "--"
                     val tmfRatioStr = futuresChip.tmfRetailRatio?.let { String.format(java.util.Locale.US, "%+.2f%%", it) } ?: "--"
-                    "• 資料日 ${futuresChip.date}｜大台未平倉：外資 ${nf.format(futuresChip.foreignTxNetOi)} 口、投信 ${nf.format(futuresChip.trustTxNetOi)} 口、自營商 ${nf.format(futuresChip.dealerTxNetOi)} 口。\n" +
+                    val oiChangeDesc = futuresChip.foreignTxOiChange?.let {
+                        val sign = if (it > 0L) "+" else ""
+                        "（日增減 $sign${nf.format(it)} 口，當日交易淨額 ${nf.format(futuresChip.foreignTxTradingNet)} 口）"
+                    } ?: "（當日交易淨額 ${nf.format(futuresChip.foreignTxTradingNet)} 口）"
+                    "• 資料日 ${futuresChip.formattedDate}（期交所每日一般盤盤後結算公布一次，約 15:15 後更新，非盤中即時報價）。\n" +
+                        "• 大台未平倉：外資 ${nf.format(futuresChip.foreignTxNetOi)} 口$oiChangeDesc、投信 ${nf.format(futuresChip.trustTxNetOi)} 口、自營商 ${nf.format(futuresChip.dealerTxNetOi)} 口。\n" +
                         "• 小台散戶淨口數 ${nf.format(futuresChip.mtxRetailNetOi)} / 總 OI ${nf.format(futuresChip.mtxTotalOi)}（$mtxRatioStr）；微台散戶淨口數 ${nf.format(futuresChip.tmfRetailNetOi)} / 總 OI ${nf.format(futuresChip.tmfTotalOi)}（$tmfRatioStr）。\n" +
-                        "• 散戶多空比常作反指標：正值過高代表散戶做多易震盪；負值過低代表散戶大舉做空易軋空。"
+                        "• 採台股紅多綠空配色；散戶多空比常作反指標：正值紅字過高代表散戶偏多易震盪；負值綠字過低代表散戶大舉做空易軋空。"
                 } else {
-                    "• 統計期交所盤後三大法人期貨未平倉與全市場總未平倉（小台/微台反推散戶淨部位）。"
+                    "• 統計期交所盤後三大法人期貨未平倉與全市場總未平倉（每日約 15:15 後更新，非盤中即時；小台/微台反推散戶淨部位）。"
                 }
                 Text(
                     text = futuresDetailText,
