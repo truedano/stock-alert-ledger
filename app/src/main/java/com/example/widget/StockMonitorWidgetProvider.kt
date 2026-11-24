@@ -50,8 +50,8 @@ class StockMonitorWidgetProvider : AppWidgetProvider() {
     }
 
     companion object {
-        const val ACTION_REFRESH_WIDGET = "com.example.widget.ACTION_REFRESH_WIDGET"
-        const val ACTION_OPEN_RULE_FROM_WIDGET = "com.example.widget.ACTION_OPEN_RULE_FROM_WIDGET"
+        const val ACTION_REFRESH_WIDGET = "com.truedano.stockalertledger.widget.ACTION_REFRESH_WIDGET"
+        const val ACTION_OPEN_RULE_FROM_WIDGET = "com.truedano.stockalertledger.widget.ACTION_OPEN_RULE_FROM_WIDGET"
         const val EXTRA_WIDGET_RULE_ID = "extra_widget_rule_id"
 
         fun updateAllWidgets(
