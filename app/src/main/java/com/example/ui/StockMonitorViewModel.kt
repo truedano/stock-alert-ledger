@@ -362,7 +362,7 @@ class StockMonitorViewModel(
         portfolioRepo.cachedQuotesFlow,
         _selectedTriggerFilter,
     ) { records, cachedQuotes, selectedFilter ->
-        val quoteMap = cachedQuotes.associateBy { it.symbol }
+        val quoteMap = cachedQuotes.associateBy { it.symbol.uppercase() }
         val tagCounts = PortfolioRepository.buildTriggerTagCounts(records)
         val effectiveFilter = selectedFilter?.takeIf { filter ->
             tagCounts.any { it.tag == filter }

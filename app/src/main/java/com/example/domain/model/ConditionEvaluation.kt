@@ -109,6 +109,73 @@ object MovingAverageCalculator {
     }
 
     /**
+     * 以 O(N) 線性時間計算整個收盤價序列每一日的 Wilder RSI(periodDays) 序列
+     */
+    fun calculateRsiSeries(closes: List<Double>, periodDays: Int = 14): List<Double?> {
+        if (closes.isEmpty()) return emptyList()
+        if (periodDays <= 0 || closes.size <= periodDays) {
+            return List(closes.size) { null }
+        }
+
+        val result = MutableList<Double?>(closes.size) { null }
+        var avgGain = 0.0
+        var avgLoss = 0.0
+
+        for (i in 1..periodDays) {
+            val d = closes[i] - closes[i - 1]
+            if (d > 0) avgGain += d else avgLoss += -d
+        }
+        avgGain /= periodDays
+        avgLoss /= periodDays
+
+        fun computeRsiValue(gain: Double, loss: Double): Double? {
+            if (loss == 0.0) return if (gain == 0.0) 50.0 else 100.0
+            val rs = gain / loss
+            val rsi = 100.0 - (100.0 / (1.0 + rs))
+            return if (rsi.isNaN() || rsi.isInfinite()) null else rsi
+        }
+
+        result[periodDays] = computeRsiValue(avgGain, avgLoss)
+
+        for (i in (periodDays + 1) until closes.size) {
+            val d = closes[i] - closes[i - 1]
+            val gain = if (d > 0) d else 0.0
+            val loss = if (d < 0) -d else 0.0
+            avgGain = (avgGain * (periodDays - 1) + gain) / periodDays
+            avgLoss = (avgLoss * (periodDays - 1) + loss) / periodDays
+            result[i] = computeRsiValue(avgGain, avgLoss)
+        }
+        return result
+    }
+
+    /**
+     * 以 O(N) 滑動視窗計算整個收盤價序列每一日的推估融資維持率（基於當日 20MA）
+     */
+    fun calculateEstimatedMarginKeepRateSeries(closes: List<Double>): List<Double?> {
+        if (closes.size < 20) return List(closes.size) { null }
+        val result = MutableList<Double?>(closes.size) { null }
+        var windowSum = 0.0
+        for (i in closes.indices) {
+            windowSum += closes[i]
+            if (i >= 20) {
+                windowSum -= closes[i - 20]
+            }
+            if (i >= 19) {
+                val priceAtI = closes[i]
+                val sma20 = windowSum / 20.0
+                val loanAmount = sma20 * 0.6
+                if (priceAtI > 0.0 && loanAmount > 0.0) {
+                    val rate = (priceAtI / loanAmount) * 100.0
+                    if (!rate.isNaN() && !rate.isInfinite() && rate > 0.0) {
+                        result[i] = rate
+                    }
+                }
+            }
+        }
+        return result
+    }
+
+    /**
      * 計算個股推估融資維持率（%）：
      * 業界標準模型以近 20 日收盤均價作為融資平均進場成本估算基底，
      * 依台灣證交所融資上市股票自備款四成、融資借款六成（成本 x 0.6）：
@@ -239,8 +306,13 @@ class PeakDrawdownEvaluator : ConditionEvaluator<PeakDrawdownCondition> {
         val targetTriggerPrice = peakPrice * (1.0 - (condition.drawdownPercent / 100.0))
         val triggered = drawdownFromPeak <= -condition.drawdownPercent
 
+        val currency = if (MarketSessionChecker.isTaiwanSymbol(snapshot.symbol)) {
+            MarketCurrency.TWD
+        } else {
+            MarketCurrency.USD
+        }
         val statusMessage = if (triggered) {
-            "自${label} (${Formatters.formatPrice(peakPrice, MarketCurrency.TWD)}) 回撤達 ${String.format(java.util.Locale.US, "%.1f", drawdownFromPeak)}% (觸發抄底)"
+            "自${label} (${Formatters.formatPrice(peakPrice, currency)}) 回撤達 ${String.format(java.util.Locale.US, "%.1f", drawdownFromPeak)}% (觸發抄底)"
         } else {
             "距${label}回撤 ${String.format(java.util.Locale.US, "%.1f", drawdownFromPeak)}%（目標 -${condition.drawdownPercent.toInt()}%）"
         }

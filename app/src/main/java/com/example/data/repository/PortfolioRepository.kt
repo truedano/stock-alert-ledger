@@ -28,7 +28,7 @@ class PortfolioRepository(
         buyRecordDao.observeAllRecords(),
         cachedQuoteDao.observeAllQuotes(),
     ) { records, cachedQuotes ->
-        val quoteMap = cachedQuotes.associateBy { it.symbol }
+        val quoteMap = cachedQuotes.associateBy { it.symbol.uppercase() }
         buildPortfolioSummary(records, quoteMap)
     }
 
@@ -80,7 +80,8 @@ class PortfolioRepository(
                     val totalShares = group.sumOf { it.shares }
                     val totalCost = group.sumOf { it.totalCost }
                     val avgCost = if (totalShares > 0.0) totalCost / totalShares else 0.0
-                    val cachedPrice = quoteMap[latest.symbol]?.currentPrice
+                    val cachedPrice = quoteMap[latest.symbol.uppercase()]?.currentPrice
+                        ?: quoteMap[latest.symbol]?.currentPrice
                     StockHoldingSummary(
                         symbol = latest.displaySymbol,
                         name = latest.name,

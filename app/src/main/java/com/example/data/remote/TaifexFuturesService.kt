@@ -30,7 +30,9 @@ class TaifexFuturesService(
         isLenient = true
     }
 
+    @Volatile
     private var memoryCache: TaiwanFuturesChipSnapshot? = null
+    @Volatile
     private var lastFetchTimestamp: Long = 0L
 
     suspend fun fetchFuturesChipSnapshot(forceRefresh: Boolean = false): TaiwanFuturesChipSnapshot? =

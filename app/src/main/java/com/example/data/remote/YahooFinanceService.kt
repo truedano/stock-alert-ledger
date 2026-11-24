@@ -258,7 +258,7 @@ class YahooFinanceService(
 
         fun defaultOkHttpClient(): OkHttpClient = OkHttpClient.Builder()
             .connectionSpecs(listOf(ConnectionSpec.MODERN_TLS, ConnectionSpec.RESTRICTED_TLS))
-            .followRedirects(false)
+            .followRedirects(true)
             .followSslRedirects(true)
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(10, TimeUnit.SECONDS)

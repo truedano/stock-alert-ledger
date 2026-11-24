@@ -134,25 +134,16 @@ fun StockCandleStickChart(
         list
     }
 
-    // 計算個股推估融資維持率歷史序列（依每日收盤價與當時 20MA 計算）
+    // 計算個股推估融資維持率歷史序列（依每日收盤價與當時 20MA 計算，O(N) 滑動視窗）
     val estMarginSeries = remember(closeHistory, displayCandles, currency) {
         if (currency != MarketCurrency.TWD || closeHistory.size < 20) emptyList()
         else {
             val totalLen = closeHistory.size
             val displayLen = displayCandles.size
             val startOffset = (totalLen - displayLen).coerceAtLeast(0)
-
-            val list = mutableListOf<Double?>()
-            for (i in startOffset until totalLen) {
-                if (i >= 19) {
-                    val sub = closeHistory.subList(0, i + 1)
-                    val priceAtI = closeHistory[i]
-                    list.add(com.example.domain.model.MovingAverageCalculator.calculateEstimatedMarginKeepRate(priceAtI, sub))
-                } else {
-                    list.add(null)
-                }
-            }
-            list
+            com.example.domain.model.MovingAverageCalculator
+                .calculateEstimatedMarginKeepRateSeries(closeHistory)
+                .subList(startOffset, totalLen)
         }
     }
     val marginCondition = remember(ruleCondition) {
@@ -172,7 +163,7 @@ fun StockCandleStickChart(
         }
     }
 
-    // 計算顯示區間的 RSI(14) 歷史序列
+    // 計算顯示區間的 RSI 歷史序列（O(N) 單次線性遞推）
     val rsiSeries = remember(closeHistory, displayCandles, rsiCondition) {
         if (rsiCondition == null) emptyList()
         else {
@@ -180,17 +171,9 @@ fun StockCandleStickChart(
             val totalLen = closeHistory.size
             val displayLen = displayCandles.size
             val startOffset = (totalLen - displayLen).coerceAtLeast(0)
-
-            val list = mutableListOf<Double?>()
-            for (i in startOffset until totalLen) {
-                if (i >= period) {
-                    val sub = closeHistory.subList(0, i + 1)
-                    list.add(com.example.domain.model.MovingAverageCalculator.calculateRsi(sub, period))
-                } else {
-                    list.add(null)
-                }
-            }
-            list
+            com.example.domain.model.MovingAverageCalculator
+                .calculateRsiSeries(closeHistory, period)
+                .subList(startOffset, totalLen)
         }
     }
     val maSeriesMap = remember(alertMarkers, closeHistory, displayCandles) {

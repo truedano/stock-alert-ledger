@@ -34,8 +34,9 @@ class StockMonitorForegroundService : Service() {
                 return START_NOT_STICKY
             }
             else -> {
-                startForegroundWithNotification()
-                startMonitoringLoop()
+                if (startForegroundWithNotification()) {
+                    startMonitoringLoop()
+                }
             }
         }
         return START_NOT_STICKY
@@ -46,7 +47,12 @@ class StockMonitorForegroundService : Service() {
         stopForegroundService()
     }
 
-    private fun startForegroundWithNotification() {
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        super.onTimeout(startId, fgsType)
+        stopForegroundService()
+    }
+
+    private fun startForegroundWithNotification(): Boolean {
         val notification = StockNotificationHelper.buildForegroundNotification(this)
         val fgType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
@@ -54,15 +60,18 @@ class StockMonitorForegroundService : Service() {
             0
         }
 
-        try {
+        return try {
             ServiceCompat.startForeground(
                 this,
                 StockNotificationHelper.FOREGROUND_NOTIFICATION_ID,
                 notification,
                 fgType,
             )
+            true
         } catch (_: Exception) {
-            // Android 14+ ForegroundServiceStartNotAllowedException fallback
+            // Android 14+ ForegroundServiceStartNotAllowedException fallback: stop immediately to avoid crash
+            stopSelf()
+            false
         }
     }
 

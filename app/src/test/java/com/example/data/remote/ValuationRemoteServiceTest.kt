@@ -143,7 +143,7 @@ class ValuationRemoteServiceTest {
             }
         """.trimIndent()
 
-        var screenerCalls = 0
+        val screenerCalls = java.util.concurrent.atomic.AtomicInteger(0)
         val client = OkHttpClient.Builder()
             .addInterceptor(Interceptor { chain ->
                 val req = chain.request()
@@ -153,7 +153,7 @@ class ValuationRemoteServiceTest {
                     url.contains("getcrumb") -> textResponse(req, 200, "testCrumb")
                     url.contains("BWIBBU_ALL") -> jsonResponse(req, 200, bwibbuJson)
                     url.contains("screener") -> {
-                        screenerCalls++
+                        screenerCalls.incrementAndGet()
                         val buf = okio.Buffer()
                         req.body?.writeTo(buf)
                         val bodyStr = buf.readUtf8()
@@ -182,7 +182,7 @@ class ValuationRemoteServiceTest {
         snap!!
         assertEquals(2, snap.twTop10.size)
         assertEquals(2, snap.usTop10.size)
-        assertEquals(2, screenerCalls)
+        assertEquals(2, screenerCalls.get())
 
         val fubon = snap.twTop10.first { it.symbol == "2881.TW" }
         assertEquals("富邦金", fubon.name)
@@ -201,7 +201,7 @@ class ValuationRemoteServiceTest {
         val cached = service.fetchValuationRadar(forceRefresh = false)
         assertNotNull(cached)
         assertTrue(cached!!.isFromCache)
-        assertEquals(2, screenerCalls)
+        assertEquals(2, screenerCalls.get())
     }
 
     @Test

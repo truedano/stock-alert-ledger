@@ -215,4 +215,48 @@ class StrategyConditionEvaluationTest {
         assertTrue(evalDrop.isTriggered)
         assertTrue(evalDrop.statusMessage.contains("全部條件已同時滿足"))
     }
+
+    @Test
+    fun `test peak drawdown uses USD formatting for US stocks and TWD for Taiwan stocks`() {
+        val closes = listOf(100.0, 200.0, 150.0)
+        val cond = PeakDrawdownCondition(lookbackDays = 10, drawdownPercent = 20.0)
+
+        val usSnap = MarketSnapshot(symbol = "AAPL", currentPrice = 150.0, historicalCloses = closes)
+        val usResult = ConditionEngine.evaluate(cond, usSnap)
+        assertTrue(usResult.isTriggered)
+        assertTrue(usResult.statusMessage.contains("US$ 200.00"))
+
+        val twSnap = MarketSnapshot(symbol = "2330.TW", currentPrice = 150.0, historicalCloses = closes)
+        val twResult = ConditionEngine.evaluate(cond, twSnap)
+        assertTrue(twResult.isTriggered)
+        assertTrue(twResult.statusMessage.contains("NT$ 200"))
+    }
+
+    @Test
+    fun `test linear O(N) RSI and margin keep rate series match single point calculations`() {
+        val closes = (1..30).map { idx -> 100.0 + (idx % 5) * 3.0 - (idx % 3) * 2.0 }
+
+        val rsiSeries = MovingAverageCalculator.calculateRsiSeries(closes, 14)
+        assertEquals(closes.size, rsiSeries.size)
+        for (i in 0 until 14) {
+            assertNull(rsiSeries[i])
+        }
+        for (i in 14 until closes.size) {
+            val expected = MovingAverageCalculator.calculateRsi(closes.subList(0, i + 1), 14)
+            assertNotNull(expected)
+            assertEquals(expected!!, rsiSeries[i]!!, 1e-6)
+        }
+
+        val marginSeries = MovingAverageCalculator.calculateEstimatedMarginKeepRateSeries(closes)
+        assertEquals(closes.size, marginSeries.size)
+        for (i in 0 until 19) {
+            assertNull(marginSeries[i])
+        }
+        for (i in 19 until closes.size) {
+            val sub = closes.subList(0, i + 1)
+            val expected = MovingAverageCalculator.calculateEstimatedMarginKeepRate(closes[i], sub)
+            assertNotNull(expected)
+            assertEquals(expected!!, marginSeries[i]!!, 1e-6)
+        }
+    }
 }

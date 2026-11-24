@@ -38,6 +38,8 @@ data class BuyRecordBackupDto(
 data class PreferencesBackupDto(
     val dataSourceMode: DataSourceMode = DataSourceMode.REAL,
     val backgroundCheckEnabled: Boolean = true,
+    val highFrequencyCheckEnabled: Boolean = false,
+    val highFrequencyIntervalSeconds: Int = 60,
 )
 
 @Serializable

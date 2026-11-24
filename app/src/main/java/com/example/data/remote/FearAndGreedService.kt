@@ -60,7 +60,9 @@ class FearAndGreedService(
         isLenient = true
     }
 
+    @Volatile
     private var memoryCache: FearAndGreedData? = null
+    @Volatile
     private var lastFetchTimestamp: Long = 0L
 
     companion object {
