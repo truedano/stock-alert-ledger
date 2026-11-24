@@ -52,6 +52,7 @@ class MarketDataRepository(
     private var latestMarginSnapshot: com.example.data.remote.MarketMarginSnapshot? = null
     private var stockMarginCache: Map<String, com.example.data.remote.StockMarginInfo> = emptyMap()
     private var latestFearAndGreed: com.example.domain.model.FearAndGreedData? = null
+    private val candleHistoryCache = java.util.concurrent.ConcurrentHashMap<String, List<com.example.domain.model.CandleStickData>>()
     private val _futuresChipFlow = MutableStateFlow<TaiwanFuturesChipSnapshot?>(null)
     val futuresChipFlow: StateFlow<TaiwanFuturesChipSnapshot?> = _futuresChipFlow.asStateFlow()
 
@@ -489,20 +490,26 @@ class MarketDataRepository(
     }
 
     fun attachMarginInfo(quote: StockQuote): StockQuote {
-        if (quote.marginInfo != null || quote.currency != MarketCurrency.TWD) {
-            return quote
+        val quoteWithCandles = if (quote.candleHistory.isEmpty()) {
+            val cachedCandles = candleHistoryCache[quote.symbol]
+            if (!cachedCandles.isNullOrEmpty()) quote.copy(candleHistory = cachedCandles) else quote
+        } else {
+            quote
         }
-        val cleanSymbol = quote.symbol.substringBefore(".").trim().uppercase()
+        if (quoteWithCandles.marginInfo != null || quoteWithCandles.currency != MarketCurrency.TWD) {
+            return quoteWithCandles
+        }
+        val cleanSymbol = quoteWithCandles.symbol.substringBefore(".").trim().uppercase()
         val twseMargin = stockMarginCache[cleanSymbol]
         val estimatedRate = com.example.domain.model.MovingAverageCalculator
-            .calculateEstimatedMarginKeepRate(quote.currentPrice, quote.closeHistory)
+            .calculateEstimatedMarginKeepRate(quoteWithCandles.currentPrice, quoteWithCandles.closeHistory)
 
         val mergedMargin = if (twseMargin != null) {
             twseMargin.copy(estimatedKeepRate = estimatedRate)
         } else if (estimatedRate != null) {
             com.example.data.remote.StockMarginInfo(
-                symbol = quote.symbol,
-                name = quote.name,
+                symbol = quoteWithCandles.symbol,
+                name = quoteWithCandles.name,
                 marginBalance = 0L,
                 marginChange = 0L,
                 shortBalance = 0L,
@@ -511,10 +518,18 @@ class MarketDataRepository(
             )
         } else null
 
-        return quote.copy(marginInfo = mergedMargin)
+        return quoteWithCandles.copy(marginInfo = mergedMargin)
     }
 
     private suspend fun upsertCachedQuote(quote: StockQuote) {
+        if (quote.candleHistory.isNotEmpty()) {
+            candleHistoryCache[quote.symbol] = quote.candleHistory
+        }
+        val existingCandles = if (quote.candleHistory.isNotEmpty()) {
+            quote.candleHistory
+        } else {
+            candleHistoryCache[quote.symbol].orEmpty()
+        }
         cachedQuoteDao.upsertQuote(
             CachedQuoteEntity(
                 symbol = quote.symbol,
@@ -526,6 +541,7 @@ class MarketDataRepository(
                 closeHistory = quote.closeHistory,
                 lastUpdatedAt = quote.lastUpdatedAt,
                 isSimulated = quote.isSimulated,
+                candleHistory = existingCandles.takeLast(500),
             )
         )
     }

@@ -61,23 +61,30 @@ class ValuationRemoteService(
         .cookieJar(object : CookieJar {
             override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
                 val hostKey = url.host.substringAfterLast("yahoo.com", url.host)
-                val bucket = cookieStore.getOrPut(hostKey) { mutableListOf() }
-                for (cookie in cookies) {
-                    bucket.removeAll { it.name == cookie.name }
-                    bucket.add(cookie)
+                synchronized(cookieStore) {
+                    val bucket = cookieStore.getOrPut(hostKey) { mutableListOf() }
+                    for (cookie in cookies) {
+                        bucket.removeAll { it.name == cookie.name }
+                        bucket.add(cookie)
+                    }
                 }
             }
 
             override fun loadForRequest(url: HttpUrl): List<Cookie> {
                 val hostKey = url.host.substringAfterLast("yahoo.com", url.host)
-                return cookieStore[hostKey]?.toList().orEmpty()
+                return synchronized(cookieStore) {
+                    cookieStore[hostKey]?.toList().orEmpty()
+                }
             }
         })
         .build()
 
     private val cacheMutex = Mutex()
+    @Volatile
     private var memorySnapshot: ValuationRadarSnapshot? = null
+    @Volatile
     private var cachedCrumb: String? = null
+    @Volatile
     private var cachedCrumbAtMs: Long = 0L
 
     suspend fun fetchValuationRadar(forceRefresh: Boolean = false): ValuationRadarSnapshot? = withContext(Dispatchers.IO) {

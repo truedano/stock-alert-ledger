@@ -2,6 +2,7 @@ package com.example.data.local
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.example.domain.model.CandleStickData
 import com.example.domain.model.MarketCurrency
 import com.example.domain.model.StockQuote
 
@@ -16,6 +17,7 @@ data class CachedQuoteEntity(
     val closeHistory: List<Double>,
     val lastUpdatedAt: Long,
     val isSimulated: Boolean = false,
+    val candleHistory: List<CandleStickData> = emptyList(),
 ) {
     fun toStockQuote(): StockQuote = StockQuote(
         symbol = symbol,
@@ -27,5 +29,6 @@ data class CachedQuoteEntity(
         closeHistory = closeHistory,
         lastUpdatedAt = lastUpdatedAt,
         isSimulated = isSimulated,
+        candleHistory = candleHistory,
     )
 }

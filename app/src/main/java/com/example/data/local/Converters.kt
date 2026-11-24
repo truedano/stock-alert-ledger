@@ -2,6 +2,7 @@ package com.example.data.local
 
 import androidx.room.TypeConverter
 import com.example.domain.model.AlertCondition
+import com.example.domain.model.CandleStickData
 import com.example.domain.model.MarketCurrency
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
@@ -35,6 +36,19 @@ class Converters {
     fun toDoubleList(raw: String): List<Double> {
         if (raw.isBlank()) return emptyList()
         return RoomJson.json.decodeFromString(ListSerializer(Double.serializer()), raw)
+    }
+
+    @TypeConverter
+    fun fromCandleList(values: List<CandleStickData>): String {
+        return RoomJson.json.encodeToString(ListSerializer(CandleStickData.serializer()), values)
+    }
+
+    @TypeConverter
+    fun toCandleList(raw: String): List<CandleStickData> {
+        if (raw.isBlank()) return emptyList()
+        return runCatching {
+            RoomJson.json.decodeFromString(ListSerializer(CandleStickData.serializer()), raw)
+        }.getOrDefault(emptyList())
     }
 
     @TypeConverter

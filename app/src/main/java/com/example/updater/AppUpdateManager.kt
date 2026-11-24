@@ -56,7 +56,6 @@ class AppUpdateManager(
 
             if (isNewerVersion(current = currentVersion, remote = remoteTag)) {
                 val apkAsset = release.assets.find { it.name.endsWith(".apk", ignoreCase = true) }
-                    ?: release.assets.firstOrNull()
 
                 if (apkAsset != null) {
                     _uiState.value = UpdateUiState.UpdateAvailable(
@@ -90,44 +89,50 @@ class AppUpdateManager(
         try {
             _uiState.value = UpdateUiState.Downloading(0)
             val request = Request.Builder().url(apkUrl).build()
-            val response = httpClient.newCall(request).execute()
-
-            if (!response.isSuccessful) {
-                _uiState.value = UpdateUiState.Error("下載失敗 (HTTP ${response.code})")
-                return@withContext
-            }
-
-            val body = response.body ?: run {
-                _uiState.value = UpdateUiState.Error("回應內容為空")
-                return@withContext
-            }
-
-            val totalBytes = body.contentLength()
-            val updateDir = File(context.cacheDir, "updates").apply { mkdirs() }
-            val apkFile = File(updateDir, "update.apk")
-            if (apkFile.exists()) {
-                apkFile.delete()
-            }
-
-            body.byteStream().use { inputStream ->
-                FileOutputStream(apkFile).use { outputStream ->
-                    val buffer = ByteArray(8 * 1024)
-                    var bytesRead: Int
-                    var totalRead = 0L
-
-                    while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                        outputStream.write(buffer, 0, bytesRead)
-                        totalRead += bytesRead
-                        if (totalBytes > 0) {
-                            val percent = ((totalRead * 100) / totalBytes).toInt()
-                            _uiState.value = UpdateUiState.Downloading(percent)
-                        }
-                    }
-                    outputStream.flush()
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    _uiState.value = UpdateUiState.Error("下載失敗 (HTTP ${response.code})")
+                    return@withContext
                 }
-            }
 
-            _uiState.value = UpdateUiState.DownloadCompleted(apkFile)
+                val body = response.body ?: run {
+                    _uiState.value = UpdateUiState.Error("回應內容為空")
+                    return@withContext
+                }
+
+                val totalBytes = body.contentLength()
+                val updateDir = File(context.cacheDir, "updates").apply { mkdirs() }
+                val apkFile = File(updateDir, "update.apk")
+                if (apkFile.exists()) {
+                    apkFile.delete()
+                }
+
+                body.byteStream().use { inputStream ->
+                    FileOutputStream(apkFile).use { outputStream ->
+                        val buffer = ByteArray(8 * 1024)
+                        var bytesRead: Int
+                        var totalRead = 0L
+
+                        while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                            outputStream.write(buffer, 0, bytesRead)
+                            totalRead += bytesRead
+                            if (totalBytes > 0) {
+                                val percent = ((totalRead * 100) / totalBytes).toInt()
+                                _uiState.value = UpdateUiState.Downloading(percent)
+                            }
+                        }
+                        outputStream.flush()
+                    }
+                }
+
+                if (apkFile.length() <= 0L || (totalBytes > 0L && apkFile.length() != totalBytes)) {
+                    apkFile.delete()
+                    _uiState.value = UpdateUiState.Error("下載的安裝包不完整，請重試")
+                    return@withContext
+                }
+
+                _uiState.value = UpdateUiState.DownloadCompleted(apkFile)
+            }
         } catch (e: Exception) {
             _uiState.value = UpdateUiState.Error("下載過程發生錯誤: ${e.localizedMessage}")
         }

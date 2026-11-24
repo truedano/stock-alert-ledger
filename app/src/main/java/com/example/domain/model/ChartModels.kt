@@ -1,5 +1,8 @@
 package com.example.domain.model
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class CandleStickData(
     val timestamp: Long,
     val open: Double,

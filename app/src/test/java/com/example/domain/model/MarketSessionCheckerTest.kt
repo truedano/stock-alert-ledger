@@ -97,6 +97,20 @@ class MarketSessionCheckerTest {
     }
 
     @Test
+    fun taiwanIndices_classifiedAsTaiwanSession() {
+        val twOpenTime = createTime(taiwanTz, 2026, 11, 18, 10, 30)
+        val twAfterClose = createTime(taiwanTz, 2026, 11, 18, 14, 0)
+
+        assertTrue(MarketSessionChecker.isMarketOpen(symbol = "^TWII", currentTimeMillis = twOpenTime))
+        assertTrue(MarketSessionChecker.isMarketOpen(symbol = "^TWOII", currentTimeMillis = twOpenTime))
+        assertTrue(MarketSessionChecker.isAnyMarketOpen(listOf("^TWII", "^TWOII"), twOpenTime))
+
+        assertFalse(MarketSessionChecker.isMarketOpen(symbol = "^TWII", currentTimeMillis = twAfterClose))
+        assertFalse(MarketSessionChecker.isMarketOpen(symbol = "^TWOII", currentTimeMillis = twAfterClose))
+        assertFalse(MarketSessionChecker.isAnyMarketOpen(listOf("^TWII", "^TWOII"), twAfterClose))
+    }
+
+    @Test
     fun suggestedDelay_simulatedMode_alwaysOneMinute() {
         val closedTime = createTime(taiwanTz, 2026, 11, 21, 10, 0) // weekend
         val delay = MarketSessionChecker.getSuggestedPollingDelayMs(

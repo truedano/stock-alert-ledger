@@ -24,13 +24,20 @@ object MarketSessionChecker {
      * US Markets (NYSE/NASDAQ):
      * - Monday to Friday: 09:30 - 16:00 Eastern Time
      */
+    fun isTaiwanSymbol(symbol: String): Boolean {
+        val trimmed = symbol.trim()
+        return trimmed.endsWith(".TW", ignoreCase = true) ||
+            trimmed.endsWith(".TWO", ignoreCase = true) ||
+            trimmed.equals("^TWII", ignoreCase = true) ||
+            trimmed.equals("^TWOII", ignoreCase = true)
+    }
+
     fun isMarketOpen(
         symbol: String? = null,
         currency: MarketCurrency? = null,
         currentTimeMillis: Long = System.currentTimeMillis(),
     ): Boolean {
-        val isTwStock = symbol?.endsWith(".TW", ignoreCase = true) == true ||
-            symbol?.endsWith(".TWO", ignoreCase = true) == true ||
+        val isTwStock = (symbol != null && isTaiwanSymbol(symbol)) ||
             currency == MarketCurrency.TWD
 
         return if (isTwStock) {
@@ -51,8 +58,8 @@ object MarketSessionChecker {
         if (symbols.isEmpty()) {
             return isTaiwanMarketOpen(currentTimeMillis) || isUsMarketOpen(currentTimeMillis)
         }
-        val hasTw = symbols.any { it.endsWith(".TW", ignoreCase = true) || it.endsWith(".TWO", ignoreCase = true) }
-        val hasUs = symbols.any { !it.endsWith(".TW", ignoreCase = true) && !it.endsWith(".TWO", ignoreCase = true) }
+        val hasTw = symbols.any { isTaiwanSymbol(it) }
+        val hasUs = symbols.any { !isTaiwanSymbol(it) }
 
         val twOpen = if (hasTw) isTaiwanMarketOpen(currentTimeMillis) else false
         val usOpen = if (hasUs) isUsMarketOpen(currentTimeMillis) else false

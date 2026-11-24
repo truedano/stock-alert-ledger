@@ -30,6 +30,14 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "ALTER TABLE `cached_quotes` ADD COLUMN `candleHistory` TEXT NOT NULL DEFAULT '[]'"
+        )
+    }
+}
+
 @Database(
     entities = [
         WatchlistRuleEntity::class,
@@ -37,7 +45,7 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
         BuyRecordEntity::class,
         AlertLogEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -58,7 +66,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "stock_ma_assistant.db",
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .fallbackToDestructiveMigration(false)
                     .build()
                     .also { instance = it }

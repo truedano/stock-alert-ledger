@@ -6,6 +6,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.SupportSQLiteOpenHelper
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.core.app.ApplicationProvider
+import com.example.domain.model.CandleStickData
 import com.example.domain.model.MarketCurrency
 import com.example.domain.model.MovingAverageCondition
 import kotlinx.coroutines.runBlocking
@@ -126,7 +127,7 @@ class AppDatabaseMigrationTest {
         createV1Database(context, dbName)
 
         val migratedDb = Room.databaseBuilder(context, AppDatabase::class.java, dbName)
-            .addMigrations(MIGRATION_1_2)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
             .allowMainThreadQueries()
             .build()
 
@@ -161,6 +162,36 @@ class AppDatabaseMigrationTest {
             assertEquals(1, logs.size)
             assertNotNull(insertedLogId)
             assertEquals(998.0, logs[0].triggeredPrice, 0.001)
+
+            // Verify cached_quotes candleHistory column works post-migration 2->3
+            val sampleCandles = listOf(
+                CandleStickData(
+                    timestamp = 1700000000L,
+                    open = 990.0,
+                    high = 1005.0,
+                    low = 985.0,
+                    close = 1000.0,
+                    volume = 25000L,
+                )
+            )
+            migratedDb.cachedQuoteDao().upsertQuote(
+                CachedQuoteEntity(
+                    symbol = "2330.TW",
+                    displaySymbol = "2330.TW",
+                    name = "台積電",
+                    currency = MarketCurrency.TWD,
+                    currentPrice = 1000.0,
+                    previousClose = 990.0,
+                    closeHistory = listOf(990.0, 1000.0),
+                    lastUpdatedAt = 1700000500000L,
+                    isSimulated = false,
+                    candleHistory = sampleCandles,
+                )
+            )
+            val cachedQuote = migratedDb.cachedQuoteDao().getQuoteBySymbol("2330.TW")
+            assertNotNull(cachedQuote)
+            assertEquals(1, cachedQuote!!.candleHistory.size)
+            assertEquals(1005.0, cachedQuote.candleHistory[0].high, 0.001)
         } finally {
             migratedDb.close()
             context.deleteDatabase(dbName)
