@@ -20,4 +20,3 @@
 # Keystores & Signing Keys
 *.jks
 *.keystore
-!release.keystore

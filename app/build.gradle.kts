@@ -16,6 +16,11 @@ val versionProps = Properties()
 if (versionPropsFile.exists()) {
   FileInputStream(versionPropsFile).use { versionProps.load(it) }
 }
+val localPropsFile = rootProject.file("local.properties")
+val localProps = Properties()
+if (localPropsFile.exists()) {
+  FileInputStream(localPropsFile).use { localProps.load(it) }
+}
 val versionMajor = (versionProps.getProperty("VERSION_MAJOR") ?: "1").toInt()
 val versionMinor = (versionProps.getProperty("VERSION_MINOR") ?: "0").toInt()
 val versionPatch = (versionProps.getProperty("VERSION_PATCH") ?: "0").toInt()
@@ -40,17 +45,26 @@ android {
   // and updating Android apps in AI Studio.
   signingConfigs {
     create("release") {
-      val envKeystorePath = System.getenv("KEYSTORE_PATH")
-      val fallbackKeystore = if (file("${rootDir}/release.keystore").exists()) {
-        "${rootDir}/release.keystore"
-      } else {
-        "${rootDir}/my-upload-key.jks"
+      val envKeystorePath = System.getenv("KEYSTORE_PATH")?.takeIf { it.isNotBlank() }
+      val localKeystorePath = localProps.getProperty("RELEASE_STORE_FILE")?.takeIf { it.isNotBlank() }
+      val candidateFile = when {
+        envKeystorePath != null -> file(envKeystorePath)
+        localKeystorePath != null -> rootProject.file(localKeystorePath)
+        rootProject.file("release.keystore").exists() -> rootProject.file("release.keystore")
+        rootProject.file("my-upload-key.jks").exists() -> rootProject.file("my-upload-key.jks")
+        else -> rootProject.file("debug.keystore")
       }
-      val keystorePath = envKeystorePath ?: fallbackKeystore
-      storeFile = file(keystorePath)
-      storePassword = System.getenv("STORE_PASSWORD") ?: ""
-      keyAlias = System.getenv("KEY_ALIAS") ?: "release"
-      keyPassword = System.getenv("KEY_PASSWORD") ?: ""
+      val isDebugFallback = candidateFile.name == "debug.keystore"
+      storeFile = candidateFile
+      storePassword = System.getenv("STORE_PASSWORD")?.takeIf { it.isNotBlank() }
+        ?: localProps.getProperty("RELEASE_STORE_PASSWORD")?.takeIf { it.isNotBlank() }
+        ?: if (isDebugFallback) "android" else ""
+      keyAlias = System.getenv("KEY_ALIAS")?.takeIf { it.isNotBlank() }
+        ?: localProps.getProperty("RELEASE_KEY_ALIAS")?.takeIf { it.isNotBlank() }
+        ?: if (isDebugFallback) "androiddebugkey" else "release"
+      keyPassword = System.getenv("KEY_PASSWORD")?.takeIf { it.isNotBlank() }
+        ?: localProps.getProperty("RELEASE_KEY_PASSWORD")?.takeIf { it.isNotBlank() }
+        ?: if (isDebugFallback) "android" else ""
     }
     create("debugConfig") {
       storeFile = file("${rootDir}/debug.keystore")
@@ -97,6 +111,7 @@ secrets {
   propertiesFileName = ".env"
   defaultPropertiesFileName = ".env.example"
   ignoreList.add("FIREBASE_APPCHECK_DEBUG_TOKEN")
+  ignoreList.add("RELEASE_.*")
 }
 
 googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.WARN }
