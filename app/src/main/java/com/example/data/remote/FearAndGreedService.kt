@@ -2,6 +2,7 @@ package com.example.data.remote
 
 import android.util.Log
 import com.example.domain.model.FearAndGreedData
+import com.example.domain.model.FearAndGreedSubIndicator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
@@ -11,9 +12,29 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 
 @Serializable
+internal data class CnnSubIndicatorSection(
+    val score: Double? = null,
+    val rating: String = "",
+)
+
+@Serializable
 internal data class CnnFearAndGreedResponse(
     @SerialName("fear_and_greed")
     val fearAndGreed: CnnFearAndGreedItem? = null,
+    @SerialName("market_momentum_sp500")
+    val marketMomentumSp500: CnnSubIndicatorSection? = null,
+    @SerialName("stock_price_strength")
+    val stockPriceStrength: CnnSubIndicatorSection? = null,
+    @SerialName("stock_price_breadth")
+    val stockPriceBreadth: CnnSubIndicatorSection? = null,
+    @SerialName("put_call_options")
+    val putCallOptions: CnnSubIndicatorSection? = null,
+    @SerialName("market_volatility_vix")
+    val marketVolatilityVix: CnnSubIndicatorSection? = null,
+    @SerialName("safe_haven_demand")
+    val safeHavenDemand: CnnSubIndicatorSection? = null,
+    @SerialName("junk_bond_demand")
+    val junkBondDemand: CnnSubIndicatorSection? = null,
 )
 
 @Serializable
@@ -47,6 +68,78 @@ class FearAndGreedService(
         private const val CACHE_EXPIRATION_MS = 60 * 60 * 1000L // 1 小時快取
     }
 
+    internal fun parseFearAndGreedJson(body: String): FearAndGreedData? {
+        if (body.isBlank()) return null
+        return runCatching {
+            val parsed = json.decodeFromString(CnnFearAndGreedResponse.serializer(), body)
+            val item = parsed.fearAndGreed ?: return@runCatching null
+
+            val subIndicators = listOfNotNull(
+                parsed.marketMomentumSp500?.toSubIndicator(
+                    key = "market_momentum_sp500",
+                    nameZh = "市場動能",
+                    descriptionZh = "S&P 500 指數與 125 日均線乖離",
+                ),
+                parsed.stockPriceStrength?.toSubIndicator(
+                    key = "stock_price_strength",
+                    nameZh = "股價強度",
+                    descriptionZh = "NYSE 創 52 週新高與新低家數比率",
+                ),
+                parsed.stockPriceBreadth?.toSubIndicator(
+                    key = "stock_price_breadth",
+                    nameZh = "股價廣度",
+                    descriptionZh = "上漲與下跌成交量比 (McClellan 指標)",
+                ),
+                parsed.putCallOptions?.toSubIndicator(
+                    key = "put_call_options",
+                    nameZh = "期權看跌/看漲比",
+                    descriptionZh = "5 日平均 Put/Call Ratio 避險情緒",
+                ),
+                parsed.marketVolatilityVix?.toSubIndicator(
+                    key = "market_volatility_vix",
+                    nameZh = "市場波動率",
+                    descriptionZh = "VIX 恐慌指數與 50 日均線水位",
+                ),
+                parsed.safeHavenDemand?.toSubIndicator(
+                    key = "safe_haven_demand",
+                    nameZh = "避險需求",
+                    descriptionZh = "近 20 日股票與公債報酬率差距",
+                ),
+                parsed.junkBondDemand?.toSubIndicator(
+                    key = "junk_bond_demand",
+                    nameZh = "垃圾債需求",
+                    descriptionZh = "非投資等級債與投資級公債利差",
+                ),
+            )
+
+            FearAndGreedData(
+                score = item.score,
+                rating = item.rating,
+                timestamp = item.timestamp,
+                previousClose = item.previousClose,
+                previousOneWeek = item.previousOneWeek,
+                previousOneMonth = item.previousOneMonth,
+                previousOneYear = item.previousOneYear,
+                subIndicators = subIndicators,
+            )
+        }.getOrNull()
+    }
+
+    private fun CnnSubIndicatorSection.toSubIndicator(
+        key: String,
+        nameZh: String,
+        descriptionZh: String,
+    ): FearAndGreedSubIndicator? {
+        val value = score ?: return null
+        return FearAndGreedSubIndicator(
+            key = key,
+            nameZh = nameZh,
+            descriptionZh = descriptionZh,
+            score = value,
+            rating = rating,
+        )
+    }
+
     suspend fun fetchFearAndGreed(forceRefresh: Boolean = false): FearAndGreedData? = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         if (!forceRefresh && memoryCache != null && (now - lastFetchTimestamp < CACHE_EXPIRATION_MS)) {
@@ -70,20 +163,7 @@ class FearAndGreedService(
                     return@withContext memoryCache
                 }
                 val body = response.body?.string().orEmpty()
-                if (body.isBlank()) return@withContext memoryCache
-
-                val parsed = json.decodeFromString(CnnFearAndGreedResponse.serializer(), body)
-                val item = parsed.fearAndGreed ?: return@withContext memoryCache
-
-                val data = FearAndGreedData(
-                    score = item.score,
-                    rating = item.rating,
-                    timestamp = item.timestamp,
-                    previousClose = item.previousClose,
-                    previousOneWeek = item.previousOneWeek,
-                    previousOneMonth = item.previousOneMonth,
-                    previousOneYear = item.previousOneYear,
-                )
+                val data = parseFearAndGreedJson(body) ?: return@withContext memoryCache
                 memoryCache = data
                 lastFetchTimestamp = now
                 data

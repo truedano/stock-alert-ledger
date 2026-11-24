@@ -86,6 +86,7 @@ data class WatchlistUiState(
     val marketKeepRate: Double? = null,
     val marketCallAccNum: Long? = null,
     val marketExeAccNum: Long? = null,
+    val marketMargin: com.example.data.remote.MarketMarginSnapshot? = null,
     val fearAndGreed: com.example.domain.model.FearAndGreedData? = null,
     val futuresChip: com.example.domain.model.TaiwanFuturesChipSnapshot? = null,
     val alertLogs: List<com.example.data.local.AlertLogEntity> = emptyList(),
@@ -184,14 +185,20 @@ class StockMonitorViewModel(
             } catch (_: Exception) {
             }
             try {
+                val snap = marketRepo.fetchTwseMarginSnapshot()
+                if (snap != null) {
+                    _marginSnapshotFlow.value = snap
+                }
+            } catch (_: Exception) {
+            }
+            try {
                 val rules = marketRepo.getEnabledRulesSnapshot()
-                val needsMargin = rules.any {
+                val hasTaiwanStocks = rules.any {
                     it.condition is com.example.domain.model.MarginMaintenanceCondition ||
                     it.currency == MarketCurrency.TWD
                 }
-                if (needsMargin) {
-                    val snap = marketRepo.fetchTwseMarginSnapshot()
-                    _marginSnapshotFlow.value = snap
+                if (hasTaiwanStocks) {
+                    marketRepo.fetchAllStockMargins()
                 }
             } catch (_: Exception) {
             }
@@ -339,6 +346,7 @@ class StockMonitorViewModel(
             marketKeepRate = marginSnap?.keepRate,
             marketCallAccNum = marginSnap?.callAccNum,
             marketExeAccNum = marginSnap?.exeAccNum,
+            marketMargin = marginSnap,
             fearAndGreed = fngData,
             futuresChip = futuresChip,
             alertLogs = alertLogs,
@@ -403,17 +411,12 @@ class StockMonitorViewModel(
                     marketRepo.fetchTaifexFuturesSnapshot(forceRefresh = true)
                 } catch (_: Exception) {
                 }
-                // 僅在有設定維持率條件或台股標的時同步更新融資維持率
-                val rules = marketRepo.getEnabledRulesSnapshot()
-                val needsMargin = rules.any {
-                    it.condition is com.example.domain.model.MarginMaintenanceCondition ||
-                    it.currency == MarketCurrency.TWD
-                }
-                if (needsMargin) {
+                try {
                     val snap = marketRepo.fetchTwseMarginSnapshot()
                     if (snap != null) {
                         _marginSnapshotFlow.value = snap
                     }
+                } catch (_: Exception) {
                 }
                 val summary = marketRepo.refreshAllEnabledRules(sendNotifications = sendNotifications)
                 _hasRateLimitWarning.value = summary.hasRateLimitOrNetworkIssue

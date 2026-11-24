@@ -70,14 +70,41 @@ class TwseMarginService(
             if (parsed.stat != "OK" || parsed.data.isEmpty()) {
                 return@withContext null
             }
-            val latest = parsed.data.last()
-            val rates = parsed.data.map { it.keepRate }.filter { it > 0.0 }
+            val validRows = parsed.data.filter { it.keepRate > 0.0 }
+            val latest = validRows.lastOrNull() ?: parsed.data.last()
+            val prev = if (validRows.size >= 2) validRows[validRows.lastIndex - 1] else null
+            val rates = validRows.map { it.keepRate }
+            val historyPoints = validRows.takeLast(15).map { row ->
+                MarketMarginDayPoint(
+                    date = row.date,
+                    keepRate = row.keepRate,
+                    crdAmt = row.crdAmt,
+                    belowAccNum = row.belowAccNum,
+                    callAccNum = row.callAccNum,
+                    callAmt = row.callAmt,
+                    exeAccNum = row.exeAccNum,
+                    exeAmt = row.exeAmt,
+                )
+            }
+            val crdChange = if (prev != null && latest.crdAmt > 0L && prev.crdAmt > 0L) {
+                latest.crdAmt - prev.crdAmt
+            } else {
+                null
+            }
             MarketMarginSnapshot(
                 date = latest.date,
                 keepRate = latest.keepRate,
                 callAccNum = latest.callAccNum,
                 exeAccNum = latest.exeAccNum,
                 recentKeepRates = rates,
+                crdAmt = latest.crdAmt,
+                crdAmtChange = crdChange,
+                belowAccNum = latest.belowAccNum,
+                callAmt = latest.callAmt,
+                exeAmt = latest.exeAmt,
+                marginAccNum = latest.marginAccNum,
+                marginAccRate = latest.marginAccRate,
+                historyPoints = historyPoints,
             )
         } catch (e: Exception) {
             Log.e("TwseMarginService", "Error parsing TWSE margin data: ${e.message}", e)

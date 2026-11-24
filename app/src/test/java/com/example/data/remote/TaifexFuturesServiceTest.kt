@@ -172,6 +172,19 @@ class TaifexFuturesServiceTest {
         assertEquals(33282L, snap.tmfRetailNetOi)
         assertEquals(81216L, snap.tmfTotalOi)
         assertEquals(40.9796, snap.tmfRetailRatio!!, 0.001)
+
+        // 5:1 weighted combined ratio: (-3708*5 + 33282) / (31854*5 + 81216) = 14742 / 240486 = +6.130%
+        assertEquals(6.1301, snap.combinedRetailRatio!!, 0.001)
+        assertEquals(14599L, snap.foreignTxLongOi)
+        assertEquals(118031L, snap.foreignTxShortOi)
+        assertEquals(93565L, snap.trustTxNetOi)
+        assertEquals(5966L, snap.trustTxTradingNet)
+        assertEquals(1068L, snap.dealerTxTradingNet)
+        assertEquals(-8549L, snap.totalInstitutionalTxNetOi)
+        assertEquals(2, snap.historyPoints.size)
+        assertEquals("2026/11/20", snap.historyPoints[0].date)
+        assertEquals("2026/11/23", snap.historyPoints[1].date)
+        assertEquals(-5569L, snap.historyPoints[1].foreignTxOiChange)
     }
 
     @Test

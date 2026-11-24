@@ -2,6 +2,7 @@ package com.example.data.remote
 
 import android.util.Log
 import com.example.domain.model.TaiwanFuturesChipSnapshot
+import com.example.domain.model.TaiwanFuturesDailyPoint
 import java.nio.charset.Charset
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -100,7 +101,7 @@ class TaifexFuturesService(
         for (idx in tradingDates.lastIndex downTo minIdx) {
             val targetDate = tradingDates[idx]
             val prevDate = tradingDates.getOrNull(idx - 1)
-            val queryStartDate = prevDate ?: targetDate
+            val queryStartDate = tradingDates.getOrNull((idx - 9).coerceAtLeast(0)) ?: prevDate ?: targetDate
 
             val instCsv = postCsvWithRetry(
                 url = OFFICIAL_INST_FUT_CSV_URL,
@@ -250,6 +251,24 @@ class TaifexFuturesService(
         return result.filterValues { it > 0L }
     }
 
+    private class OfficialDayAccumulator {
+        var foreignNetOi: Long = 0L
+        var foreignTradingNet: Long = 0L
+        var foreignLongOi: Long = 0L
+        var foreignShortOi: Long = 0L
+        var trustNetOi: Long = 0L
+        var trustTradingNet: Long = 0L
+        var trustLongOi: Long = 0L
+        var trustShortOi: Long = 0L
+        var dealerNetOi: Long = 0L
+        var dealerTradingNet: Long = 0L
+        var dealerLongOi: Long = 0L
+        var dealerShortOi: Long = 0L
+        var hasTxForeign: Boolean = false
+        var mtxInstNet: Long = 0L
+        var tmfInstNet: Long = 0L
+    }
+
     internal fun parseOfficialCsvData(
         instCsv: String,
         mtxTotalOiByDate: Map<String, Long>,
@@ -258,15 +277,7 @@ class TaifexFuturesService(
         prevDate: String? = null,
     ): TaiwanFuturesChipSnapshot? {
         return runCatching {
-            var foreignNetOi = 0L
-            var foreignTradingNet = 0L
-            var trustNetOi = 0L
-            var dealerNetOi = 0L
-            var hasTxForeign = false
-            var prevForeignNetOi: Long? = null
-
-            var mtxInstNet = 0L
-            var tmfInstNet = 0L
+            val byDate = sortedMapOf<String, OfficialDayAccumulator>()
 
             instCsv.lineSequence().forEach { rawLine ->
                 val line = rawLine.trim()
@@ -276,58 +287,109 @@ class TaifexFuturesService(
 
                 val date = cols[0].trim()
                 if (!CSV_DATE_REGEX.matches(date)) return@forEach
+                if (date > targetDate) return@forEach
+
                 val contractName = cols[1].trim()
                 val item = cols[2].trim()
                 val tradingNet = cols[7].trim().replace(",", "").toLongOrNull() ?: 0L
+                val longOi = cols[9].trim().replace(",", "").toLongOrNull() ?: 0L
+                val shortOi = cols[11].trim().replace(",", "").toLongOrNull() ?: 0L
                 val netOi = cols[13].trim().replace(",", "").toLongOrNull() ?: 0L
 
-                when (date) {
-                    targetDate -> when (contractName) {
-                        "臺股期貨" -> when {
-                            item.contains("外資") -> {
-                                foreignNetOi = netOi
-                                foreignTradingNet = tradingNet
-                                hasTxForeign = true
-                            }
-                            item.contains("投信") -> trustNetOi = netOi
-                            item.contains("自營商") -> dealerNetOi = netOi
+                val acc = byDate.getOrPut(date) { OfficialDayAccumulator() }
+                when (contractName) {
+                    "臺股期貨" -> when {
+                        item.contains("外資") -> {
+                            acc.foreignNetOi = netOi
+                            acc.foreignTradingNet = tradingNet
+                            acc.foreignLongOi = longOi
+                            acc.foreignShortOi = shortOi
+                            acc.hasTxForeign = true
                         }
-                        "小型臺指期貨" -> mtxInstNet += netOi
-                        "微型臺指期貨" -> tmfInstNet += netOi
+                        item.contains("投信") -> {
+                            acc.trustNetOi = netOi
+                            acc.trustTradingNet = tradingNet
+                            acc.trustLongOi = longOi
+                            acc.trustShortOi = shortOi
+                        }
+                        item.contains("自營商") -> {
+                            acc.dealerNetOi = netOi
+                            acc.dealerTradingNet = tradingNet
+                            acc.dealerLongOi = longOi
+                            acc.dealerShortOi = shortOi
+                        }
                     }
-                    prevDate -> if (
-                        prevDate != targetDate &&
-                        contractName == "臺股期貨" &&
-                        item.contains("外資")
-                    ) {
-                        prevForeignNetOi = netOi
-                    }
+                    "小型臺指期貨" -> acc.mtxInstNet += netOi
+                    "微型臺指期貨" -> acc.tmfInstNet += netOi
                 }
             }
 
-            if (!hasTxForeign) return null
+            val targetAcc = byDate[targetDate] ?: return null
+            if (!targetAcc.hasTxForeign) return null
+
+            val validDates = byDate.entries
+                .filter { it.value.hasTxForeign }
+                .map { it.key }
+                .sorted()
+
+            val effectivePrevDate = prevDate?.takeIf { it != targetDate && byDate[it]?.hasTxForeign == true }
+                ?: validDates.lastOrNull { it < targetDate }
+            val prevAcc = effectivePrevDate?.let { byDate[it] }
 
             val mtxTotalOi = mtxTotalOiByDate[targetDate] ?: 0L
             val tmfTotalOi = tmfTotalOiByDate[targetDate] ?: 0L
-            val mtxRetailNetOi = -mtxInstNet
-            val tmfRetailNetOi = -tmfInstNet
+            val mtxRetailNetOi = -targetAcc.mtxInstNet
+            val tmfRetailNetOi = -targetAcc.tmfInstNet
 
             val mtxRatio = if (mtxTotalOi > 0L) (mtxRetailNetOi.toDouble() / mtxTotalOi.toDouble()) * 100.0 else null
             val tmfRatio = if (tmfTotalOi > 0L) (tmfRetailNetOi.toDouble() / tmfTotalOi.toDouble()) * 100.0 else null
 
+            val historyPoints = validDates.takeLast(10).mapIndexed { index, date ->
+                val acc = byDate.getValue(date)
+                val prevHistoryAcc = if (index > 0) byDate[validDates.takeLast(10)[index - 1]] else null
+                val dMtxTotal = mtxTotalOiByDate[date] ?: 0L
+                val dTmfTotal = tmfTotalOiByDate[date] ?: 0L
+                val dMtxRetail = -acc.mtxInstNet
+                val dTmfRetail = -acc.tmfInstNet
+                TaiwanFuturesDailyPoint(
+                    date = date,
+                    foreignTxNetOi = acc.foreignNetOi,
+                    foreignTxOiChange = prevHistoryAcc?.let { acc.foreignNetOi - it.foreignNetOi },
+                    trustTxNetOi = acc.trustNetOi,
+                    dealerTxNetOi = acc.dealerNetOi,
+                    mtxRetailNetOi = dMtxRetail,
+                    mtxTotalOi = dMtxTotal,
+                    mtxRetailRatio = if (dMtxTotal > 0L) (dMtxRetail.toDouble() / dMtxTotal.toDouble()) * 100.0 else null,
+                    tmfRetailNetOi = dTmfRetail,
+                    tmfTotalOi = dTmfTotal,
+                    tmfRetailRatio = if (dTmfTotal > 0L) (dTmfRetail.toDouble() / dTmfTotal.toDouble()) * 100.0 else null,
+                )
+            }
+
             TaiwanFuturesChipSnapshot(
                 date = targetDate,
-                foreignTxNetOi = foreignNetOi,
-                foreignTxTradingNet = foreignTradingNet,
-                trustTxNetOi = trustNetOi,
-                dealerTxNetOi = dealerNetOi,
+                foreignTxNetOi = targetAcc.foreignNetOi,
+                foreignTxTradingNet = targetAcc.foreignTradingNet,
+                trustTxNetOi = targetAcc.trustNetOi,
+                dealerTxNetOi = targetAcc.dealerNetOi,
                 mtxRetailNetOi = mtxRetailNetOi,
                 mtxTotalOi = mtxTotalOi,
                 mtxRetailRatio = mtxRatio,
                 tmfRetailNetOi = tmfRetailNetOi,
                 tmfTotalOi = tmfTotalOi,
                 tmfRetailRatio = tmfRatio,
-                foreignTxOiChange = prevForeignNetOi?.let { foreignNetOi - it },
+                foreignTxOiChange = prevAcc?.let { targetAcc.foreignNetOi - it.foreignNetOi },
+                trustTxTradingNet = targetAcc.trustTradingNet,
+                dealerTxTradingNet = targetAcc.dealerTradingNet,
+                trustTxOiChange = prevAcc?.let { targetAcc.trustNetOi - it.trustNetOi },
+                dealerTxOiChange = prevAcc?.let { targetAcc.dealerNetOi - it.dealerNetOi },
+                foreignTxLongOi = targetAcc.foreignLongOi,
+                foreignTxShortOi = targetAcc.foreignShortOi,
+                trustTxLongOi = targetAcc.trustLongOi,
+                trustTxShortOi = targetAcc.trustShortOi,
+                dealerTxLongOi = targetAcc.dealerLongOi,
+                dealerTxShortOi = targetAcc.dealerShortOi,
+                historyPoints = historyPoints,
             )
         }.onFailure { e ->
             logError("Failed to parse TAIFEX official CSV data: ${e.message}", e)
@@ -346,7 +408,9 @@ class TaifexFuturesService(
             var foreignNetOi = 0L
             var foreignTradingNet = 0L
             var trustNetOi = 0L
+            var trustTradingNet = 0L
             var dealerNetOi = 0L
+            var dealerTradingNet = 0L
             var hasTxForeign = false
 
             var mtxInstNet = 0L
@@ -370,8 +434,14 @@ class TaifexFuturesService(
                                 foreignTradingNet = tradingNet
                                 hasTxForeign = true
                             }
-                            item.contains("投信") -> trustNetOi = netOi
-                            item.contains("自營商") -> dealerNetOi = netOi
+                            item.contains("投信") -> {
+                                trustNetOi = netOi
+                                trustTradingNet = tradingNet
+                            }
+                            item.contains("自營商") -> {
+                                dealerNetOi = netOi
+                                dealerTradingNet = tradingNet
+                            }
                         }
                     }
                     "小型臺指期貨" -> mtxInstNet += obj.long("OpenInterest(Net)")
@@ -415,6 +485,8 @@ class TaifexFuturesService(
                 tmfTotalOi = tmfTotalOi,
                 tmfRetailRatio = tmfRatio,
                 foreignTxOiChange = null,
+                trustTxTradingNet = trustTradingNet,
+                dealerTxTradingNet = dealerTradingNet,
             )
         }.onFailure { e ->
             logError("Failed to parse TAIFEX futures chip data: ${e.message}", e)

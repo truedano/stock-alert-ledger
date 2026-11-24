@@ -13,10 +13,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Refresh
@@ -40,11 +38,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.example.domain.model.DataSourceMode
 import com.example.domain.model.Formatters
@@ -198,8 +193,10 @@ fun WatchlistStatusHeader(
     marketKeepRate: Double? = null,
     marketCallAccNum: Long? = null,
     marketExeAccNum: Long? = null,
+    marketMargin: com.example.data.remote.MarketMarginSnapshot? = null,
     fearAndGreed: com.example.domain.model.FearAndGreedData? = null,
     futuresChip: com.example.domain.model.TaiwanFuturesChipSnapshot? = null,
+    watchlistItems: List<com.example.ui.WatchlistItemUi> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -263,17 +260,20 @@ fun WatchlistStatusHeader(
                     color = TextSecondary,
                 )
 
-                // 宏觀市場概況：美股恐懼貪婪 + 台股融資維持率 + 台指期籌碼
-                val hasMargin = marketKeepRate != null && marketKeepRate > 0.0
+                // 宏觀市場概況：2x2 獨立可點擊四宮格（美股恐懼貪婪 + 台股融資維持率 + 外資期貨未平倉 + 散戶多空比）
+                val effectiveKeepRate = marketMargin?.keepRate ?: marketKeepRate
+                val hasMargin = effectiveKeepRate != null && effectiveKeepRate > 0.0
                 val hasFng = fearAndGreed != null
                 if (hasFng || hasMargin || futuresChip != null) {
                     Spacer(modifier = Modifier.height(10.dp))
                     MarketMacroSentimentPanel(
                         fearAndGreed = fearAndGreed,
-                        marketKeepRate = marketKeepRate,
-                        marketCallAccNum = marketCallAccNum,
-                        marketExeAccNum = marketExeAccNum,
+                        marketKeepRate = effectiveKeepRate,
+                        marketCallAccNum = marketMargin?.callAccNum ?: marketCallAccNum,
+                        marketExeAccNum = marketMargin?.exeAccNum ?: marketExeAccNum,
+                        marketMargin = marketMargin,
                         futuresChip = futuresChip,
+                        watchlistItems = watchlistItems,
                     )
                 }
 
@@ -324,25 +324,24 @@ fun MarketMacroSentimentPanel(
     marketKeepRate: Double?,
     marketCallAccNum: Long?,
     marketExeAccNum: Long?,
+    marketMargin: com.example.data.remote.MarketMarginSnapshot? = null,
     futuresChip: com.example.domain.model.TaiwanFuturesChipSnapshot? = null,
+    watchlistItems: List<com.example.ui.WatchlistItemUi> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
-    var showDialog by remember { mutableStateOf(false) }
+    var selectedDetailTab by remember { mutableStateOf<MacroIndicatorTab?>(null) }
 
     Surface(
         shape = RoundedCornerShape(14.dp),
         color = SurfaceElevated.copy(alpha = 0.95f),
         border = BorderStroke(1.dp, HairlineBorder),
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .clickable { showDialog = true },
+        modifier = modifier.fillMaxWidth(),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             // 標題列
             Row(
@@ -350,69 +349,141 @@ fun MarketMacroSentimentPanel(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "🌐 市場宏觀溫度計",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = BrandSky,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "美股情緒 · 台股籌碼",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextMuted,
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "ⓘ",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = BrandSky.copy(alpha = 0.8f),
-                    )
-                }
+                Text(
+                    text = "🌐 市場宏觀溫度計",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = BrandSky,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = "點擊任一指標看細項 ›",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextMuted,
+                )
             }
 
-            // 雙欄排版：左欄美股恐懼指數，右欄台股融資維持率
+            // 第一列：美股恐懼貪婪 ｜ 台股融資維持率
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                // 美股 CNN 恐懼與貪婪指數
                 Box(modifier = Modifier.weight(1f)) {
                     if (fearAndGreed != null) {
-                        FearAndGreedMiniCard(data = fearAndGreed)
+                        FearAndGreedMiniCard(
+                            data = fearAndGreed,
+                            onClick = { selectedDetailTab = MacroIndicatorTab.FEAR_AND_GREED },
+                            modifier = Modifier.testTag("macro_card_fng"),
+                        )
                     } else {
-                        EmptySentimentPlaceholder(title = "美股恐懼與貪婪", subtitle = "暫無數據")
+                        EmptySentimentPlaceholder(
+                            title = "美股恐懼貪婪",
+                            subtitle = "暫無數據",
+                            onClick = { selectedDetailTab = MacroIndicatorTab.FEAR_AND_GREED },
+                            modifier = Modifier.testTag("macro_card_fng"),
+                        )
                     }
                 }
 
-                // 台股全市場融資維持率
                 Box(modifier = Modifier.weight(1f)) {
                     if (marketKeepRate != null && marketKeepRate > 0.0) {
                         TaiwanMarginMiniCard(
                             keepRate = marketKeepRate,
                             callAccNum = marketCallAccNum,
                             exeAccNum = marketExeAccNum,
+                            onClick = { selectedDetailTab = MacroIndicatorTab.TW_MARGIN },
+                            modifier = Modifier.testTag("macro_card_margin"),
                         )
                     } else {
-                        EmptySentimentPlaceholder(title = "台股融資維持率", subtitle = "台股休市或載入中")
+                        EmptySentimentPlaceholder(
+                            title = "台股融資維持率",
+                            subtitle = "台股休市或載入中",
+                            onClick = { selectedDetailTab = MacroIndicatorTab.TW_MARGIN },
+                            modifier = Modifier.testTag("macro_card_margin"),
+                        )
                     }
                 }
             }
 
-            if (futuresChip != null) {
-                TaiwanFuturesChipStrip(data = futuresChip)
+            // 第二列：外資台指期未平倉 ｜ 散戶多空比 (小台/微台)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Box(modifier = Modifier.weight(1f)) {
+                    if (futuresChip != null) {
+                        ForeignFuturesMiniCard(
+                            data = futuresChip,
+                            onClick = { selectedDetailTab = MacroIndicatorTab.FOREIGN_FUTURES },
+                            modifier = Modifier.testTag("macro_card_foreign_futures"),
+                        )
+                    } else {
+                        EmptySentimentPlaceholder(
+                            title = "外資台指期未平倉",
+                            subtitle = "盤後載入中",
+                            onClick = { selectedDetailTab = MacroIndicatorTab.FOREIGN_FUTURES },
+                            modifier = Modifier.testTag("macro_card_foreign_futures"),
+                        )
+                    }
+                }
+
+                Box(modifier = Modifier.weight(1f)) {
+                    if (futuresChip != null) {
+                        RetailFuturesMiniCard(
+                            data = futuresChip,
+                            onClick = { selectedDetailTab = MacroIndicatorTab.RETAIL_RATIO },
+                            modifier = Modifier.testTag("macro_card_retail_futures"),
+                        )
+                    } else {
+                        EmptySentimentPlaceholder(
+                            title = "散戶多空比",
+                            subtitle = "盤後載入中",
+                            onClick = { selectedDetailTab = MacroIndicatorTab.RETAIL_RATIO },
+                            modifier = Modifier.testTag("macro_card_retail_futures"),
+                        )
+                    }
+                }
             }
         }
     }
 
-    if (showDialog) {
-        MacroSentimentExplainDialog(
+    selectedDetailTab?.let { initialTab ->
+        MacroIndicatorDetailSheet(
+            initialTab = initialTab,
             fearAndGreed = fearAndGreed,
+            marketMargin = marketMargin,
             marketKeepRate = marketKeepRate,
+            marketCallAccNum = marketCallAccNum,
+            marketExeAccNum = marketExeAccNum,
             futuresChip = futuresChip,
-            onDismiss = { showDialog = false }
+            watchlistItems = watchlistItems,
+            onDismiss = { selectedDetailTab = null },
+        )
+    }
+}
+
+@Composable
+private fun MiniCardHeaderRow(
+    title: String,
+    accentColor: Color = BrandSky,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelSmall,
+            color = TextSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = "›",
+            style = MaterialTheme.typography.labelMedium,
+            color = accentColor.copy(alpha = 0.8f),
+            fontWeight = FontWeight.Bold,
         )
     }
 }
@@ -420,6 +491,7 @@ fun MarketMacroSentimentPanel(
 @Composable
 private fun FearAndGreedMiniCard(
     data: com.example.domain.model.FearAndGreedData,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val classification = data.ratingClassification
@@ -431,19 +503,17 @@ private fun FearAndGreedMiniCard(
         shape = RoundedCornerShape(10.dp),
         color = containerColor.copy(alpha = 0.65f),
         border = BorderStroke(1.dp, primaryColor.copy(alpha = 0.4f)),
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(10.dp),
         ) {
-            // 頂部標題
-            Text(
-                text = "美股恐懼貪婪",
-                style = MaterialTheme.typography.labelSmall,
-                color = TextSecondary,
-            )
+            MiniCardHeaderRow(title = "美股恐懼貪婪", accentColor = primaryColor)
 
             Spacer(modifier = Modifier.height(4.dp))
 
@@ -483,7 +553,6 @@ private fun FearAndGreedMiniCard(
                     .height(9.dp),
                 contentAlignment = Alignment.CenterStart,
             ) {
-                // 漸層底條
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -502,7 +571,6 @@ private fun FearAndGreedMiniCard(
                         )
                 )
 
-                // 游標指針 (白心外圈帶陰影)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(fraction = scoreFraction)
@@ -544,6 +612,7 @@ private fun TaiwanMarginMiniCard(
     keepRate: Double,
     callAccNum: Long?,
     exeAccNum: Long?,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val isPanic = keepRate < 150.0
@@ -568,19 +637,17 @@ private fun TaiwanMarginMiniCard(
         shape = RoundedCornerShape(10.dp),
         color = badgeBg.copy(alpha = 0.65f),
         border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.4f)),
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(10.dp),
         ) {
-            // 頂部標題
-            Text(
-                text = "台股融資維持率",
-                style = MaterialTheme.typography.labelSmall,
-                color = TextSecondary,
-            )
+            MiniCardHeaderRow(title = "台股融資維持率", accentColor = badgeColor)
 
             Spacer(modifier = Modifier.height(4.dp))
 
@@ -678,11 +745,11 @@ private fun TaiwanMarginMiniCard(
 }
 
 @Composable
-private fun TaiwanFuturesChipStrip(
+private fun ForeignFuturesMiniCard(
     data: com.example.domain.model.TaiwanFuturesChipSnapshot,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // 採台股紅多綠空慣例
     val foreignColor = when {
         data.foreignTxNetOi > 0L -> TaiwanRed
         data.foreignTxNetOi < 0L -> TaiwanGreen
@@ -692,59 +759,50 @@ private fun TaiwanFuturesChipStrip(
     val nf = remember { java.text.NumberFormat.getIntegerInstance(java.util.Locale.US) }
     val deltaText = if (data.foreignTxOiChange != null) {
         val sign = if (data.foreignTxOiChange > 0L) "+" else ""
-        "(日 $sign${nf.format(data.foreignTxOiChange)})"
+        "日 $sign${nf.format(data.foreignTxOiChange)}"
     } else {
         val sign = if (data.foreignTxTradingNet > 0L) "+" else ""
-        "(交易 $sign${nf.format(data.foreignTxTradingNet)})"
-    }
-
-    fun ratioColor(ratio: Double?): Color = when {
-        ratio == null -> TextPrimary
-        ratio > 0.0 -> TaiwanRed
-        ratio < 0.0 -> TaiwanGreen
-        else -> TextSecondary
-    }
-
-    val mtxStr = data.mtxRetailRatio?.let { String.format(java.util.Locale.US, "%+.1f%%", it) } ?: "--"
-    val tmfStr = data.tmfRetailRatio?.let { String.format(java.util.Locale.US, "%+.1f%%", it) } ?: "--"
-    val retailAnnotated = buildAnnotatedString {
-        withStyle(SpanStyle(color = TextSecondary, fontWeight = FontWeight.Normal)) {
-            append("小台 ")
-        }
-        withStyle(SpanStyle(color = ratioColor(data.mtxRetailRatio), fontWeight = FontWeight.Bold)) {
-            append(mtxStr)
-        }
-        withStyle(SpanStyle(color = TextSecondary, fontWeight = FontWeight.Normal)) {
-            append(" · 微台 ")
-        }
-        withStyle(SpanStyle(color = ratioColor(data.tmfRetailRatio), fontWeight = FontWeight.Bold)) {
-            append(tmfStr)
-        }
+        "交 $sign${nf.format(data.foreignTxTradingNet)}"
     }
 
     Surface(
         shape = RoundedCornerShape(10.dp),
         color = SurfaceCardHigh.copy(alpha = 0.72f),
-        border = BorderStroke(1.dp, HairlineBorder),
-        modifier = modifier.fillMaxWidth(),
+        border = BorderStroke(1.dp, foreignColor.copy(alpha = 0.35f)),
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+                .padding(10.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
+            MiniCardHeaderRow(title = "外資台指期未平倉", accentColor = foreignColor)
+
+            Text(
+                text = "$foreignSign${nf.format(data.foreignTxNetOi)} 口",
+                style = FinancialTextStyles.numericMedium,
+                color = foreignColor,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "期交所盤後籌碼",
+                    text = deltaText,
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontSize = androidx.compose.ui.unit.TextUnit(10f, androidx.compose.ui.unit.TextUnitType.Sp),
                     ),
                     color = TextMuted,
+                    maxLines = 1,
                 )
                 Text(
                     text = "${data.shortDateLabel} 盤後",
@@ -752,176 +810,129 @@ private fun TaiwanFuturesChipStrip(
                         fontSize = androidx.compose.ui.unit.TextUnit(10f, androidx.compose.ui.unit.TextUnitType.Sp),
                     ),
                     color = BrandSky.copy(alpha = 0.85f),
-                    fontWeight = FontWeight.Medium,
                 )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "外資台指期未平倉",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = androidx.compose.ui.unit.TextUnit(10f, androidx.compose.ui.unit.TextUnitType.Sp),
-                        ),
-                        color = TextSecondary,
-                    )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Text(
-                            text = "$foreignSign${nf.format(data.foreignTxNetOi)} 口",
-                            style = FinancialTextStyles.numericSmall,
-                            color = foreignColor,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                        )
-                        Text(
-                            text = deltaText,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = androidx.compose.ui.unit.TextUnit(10f, androidx.compose.ui.unit.TextUnitType.Sp),
-                            ),
-                            color = TextMuted,
-                            maxLines = 1,
-                        )
-                    }
-                }
-
-                Column(
-                    modifier = Modifier.weight(1f),
-                    horizontalAlignment = Alignment.End,
-                ) {
-                    Text(
-                        text = "散戶多空比 (小台/微台)",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = androidx.compose.ui.unit.TextUnit(10f, androidx.compose.ui.unit.TextUnitType.Sp),
-                        ),
-                        color = TextSecondary,
-                    )
-                    Text(
-                        text = retailAnnotated,
-                        style = FinancialTextStyles.numericSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
             }
         }
     }
 }
 
 @Composable
-private fun MacroSentimentExplainDialog(
-    fearAndGreed: com.example.domain.model.FearAndGreedData?,
-    marketKeepRate: Double?,
-    futuresChip: com.example.domain.model.TaiwanFuturesChipSnapshot? = null,
-    onDismiss: () -> Unit,
+private fun RetailFuturesMiniCard(
+    data: com.example.domain.model.TaiwanFuturesChipSnapshot,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = "🌐 市場宏觀溫度計指南", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
-            }
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+    val combined = data.combinedRetailRatio
+    fun ratioColor(ratio: Double?): Color = when {
+        ratio == null -> TextPrimary
+        ratio > 0.0 -> TaiwanRed
+        ratio < 0.0 -> TaiwanGreen
+        else -> TextSecondary
+    }
+
+    val combinedColor = ratioColor(combined)
+    val combinedStr = combined?.let { String.format(java.util.Locale.US, "%+.1f%%", it) } ?: "--"
+    val mtxStr = data.mtxRetailRatio?.let { String.format(java.util.Locale.US, "%+.1f%%", it) } ?: "--"
+    val tmfStr = data.tmfRetailRatio?.let { String.format(java.util.Locale.US, "%+.1f%%", it) } ?: "--"
+
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = SurfaceCardHigh.copy(alpha = 0.72f),
+        border = BorderStroke(1.dp, combinedColor.copy(alpha = 0.35f)),
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            MiniCardHeaderRow(title = "散戶多空比 (綜合)", accentColor = combinedColor)
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
-                    text = "【美股 CNN 恐懼與貪婪指數】",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = BrandSky,
-                    fontWeight = FontWeight.Bold
+                    text = combinedStr,
+                    style = FinancialTextStyles.numericMedium,
+                    color = combinedColor,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
                 )
-                Text(
-                    text = "• 範圍 0 ~ 100，整合市場動能、波動率(VIX)、Put/Call Ratio 等 7 項宏觀數據。\n• < 25 為「極度恐慌」（巴菲特抄底區）；> 75 為「極度貪婪」（市場過熱警戒）。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary,
-                )
-
-                Spacer(modifier = Modifier.height(2.dp))
-
-                Text(
-                    text = "【台股全市場融資維持率】",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = BrandSky,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "• < 130%：法定斷頭保證金追繳線。\n• < 150%：恐慌多殺多主跌段（融資萬人斷頭出清，經典長線抄底買點）。\n• ≥ 170%：籌碼健康安全水位，多頭格局熱絡。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary,
-                )
-
-                Spacer(modifier = Modifier.height(2.dp))
-
-                Text(
-                    text = "【台指期外資未平倉 ＆ 散戶多空比】",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = BrandSky,
-                    fontWeight = FontWeight.Bold
-                )
-                val futuresDetailText = if (futuresChip != null) {
-                    val nf = java.text.NumberFormat.getIntegerInstance(java.util.Locale.US)
-                    val mtxRatioStr = futuresChip.mtxRetailRatio?.let { String.format(java.util.Locale.US, "%+.2f%%", it) } ?: "--"
-                    val tmfRatioStr = futuresChip.tmfRetailRatio?.let { String.format(java.util.Locale.US, "%+.2f%%", it) } ?: "--"
-                    val oiChangeDesc = futuresChip.foreignTxOiChange?.let {
-                        val sign = if (it > 0L) "+" else ""
-                        "（日增減 $sign${nf.format(it)} 口，當日交易淨額 ${nf.format(futuresChip.foreignTxTradingNet)} 口）"
-                    } ?: "（當日交易淨額 ${nf.format(futuresChip.foreignTxTradingNet)} 口）"
-                    "• 資料日 ${futuresChip.formattedDate}（期交所每日一般盤盤後結算公布一次，約 15:15 後更新，非盤中即時報價）。\n" +
-                        "• 大台未平倉：外資 ${nf.format(futuresChip.foreignTxNetOi)} 口$oiChangeDesc、投信 ${nf.format(futuresChip.trustTxNetOi)} 口、自營商 ${nf.format(futuresChip.dealerTxNetOi)} 口。\n" +
-                        "• 小台散戶淨口數 ${nf.format(futuresChip.mtxRetailNetOi)} / 總 OI ${nf.format(futuresChip.mtxTotalOi)}（$mtxRatioStr）；微台散戶淨口數 ${nf.format(futuresChip.tmfRetailNetOi)} / 總 OI ${nf.format(futuresChip.tmfTotalOi)}（$tmfRatioStr）。\n" +
-                        "• 採台股紅多綠空配色；散戶多空比常作反指標：正值紅字過高代表散戶偏多易震盪；負值綠字過低代表散戶大舉做空易軋空。"
-                } else {
-                    "• 統計期交所盤後三大法人期貨未平倉與全市場總未平倉（每日約 15:15 後更新，非盤中即時；小台/微台反推散戶淨部位）。"
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = combinedColor.copy(alpha = 0.16f),
+                ) {
+                    Text(
+                        text = when {
+                            combined == null -> "--"
+                            combined > 5.0 -> "偏多"
+                            combined < -5.0 -> "偏空"
+                            else -> "中性"
+                        },
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = androidx.compose.ui.unit.TextUnit(10f, androidx.compose.ui.unit.TextUnitType.Sp),
+                        ),
+                        color = combinedColor,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                    )
                 }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
-                    text = futuresDetailText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary,
+                    text = "小台 $mtxStr",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = androidx.compose.ui.unit.TextUnit(10f, androidx.compose.ui.unit.TextUnitType.Sp),
+                    ),
+                    color = ratioColor(data.mtxRetailRatio),
+                    maxLines = 1,
+                )
+                Text(
+                    text = "微台 $tmfStr",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = androidx.compose.ui.unit.TextUnit(10f, androidx.compose.ui.unit.TextUnitType.Sp),
+                    ),
+                    color = ratioColor(data.tmfRetailRatio),
+                    maxLines = 1,
                 )
             }
-        },
-        confirmButton = {
-            androidx.compose.material3.TextButton(onClick = onDismiss) {
-                Text(text = "了解", color = BrandSky)
-            }
-        },
-        containerColor = SurfaceElevated,
-    )
+        }
+    }
 }
 
 @Composable
 private fun EmptySentimentPlaceholder(
     title: String,
     subtitle: String,
+    onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     Surface(
         shape = RoundedCornerShape(10.dp),
         color = SurfaceCardHigh.copy(alpha = 0.5f),
         border = BorderStroke(1.dp, HairlineBorder),
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .let { base -> if (onClick != null) base.clickable(onClick = onClick) else base },
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 10.dp, vertical = 12.dp),
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelSmall,
-                color = TextSecondary,
-            )
+            MiniCardHeaderRow(title = title, accentColor = TextMuted)
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = subtitle,

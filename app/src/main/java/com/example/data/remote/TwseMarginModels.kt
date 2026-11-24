@@ -45,13 +45,39 @@ data class TwseCreditTrendItem(
     val marginAccRate: Double = 0.0,
 )
 
+data class MarketMarginDayPoint(
+    val date: String,
+    val keepRate: Double,
+    val crdAmt: Long = 0L,
+    val belowAccNum: Long = 0L,
+    val callAccNum: Long = 0L,
+    val callAmt: Long = 0L,
+    val exeAccNum: Long = 0L,
+    val exeAmt: Long = 0L,
+)
+
 data class MarketMarginSnapshot(
     val date: String,
     val keepRate: Double,
     val callAccNum: Long,
     val exeAccNum: Long,
     val recentKeepRates: List<Double>,
-)
+    val crdAmt: Long = 0L,
+    val crdAmtChange: Long? = null,
+    val belowAccNum: Long = 0L,
+    val callAmt: Long = 0L,
+    val exeAmt: Long = 0L,
+    val marginAccNum: Long = 0L,
+    val marginAccRate: Double = 0.0,
+    val historyPoints: List<MarketMarginDayPoint> = emptyList(),
+) {
+    val keepRateChange: Double?
+        get() = if (recentKeepRates.size >= 2) {
+            recentKeepRates.last() - recentKeepRates[recentKeepRates.lastIndex - 1]
+        } else {
+            null
+        }
+}
 
 data class StockMarginInfo(
     val symbol: String,

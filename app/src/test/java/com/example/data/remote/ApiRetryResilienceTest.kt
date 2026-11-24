@@ -131,8 +131,8 @@ class ApiRetryResilienceTest {
             {
               "stat": "OK",
               "data": [
-                {"date": "113/11/20", "keepRate": 162.5, "callAccNum": 100, "exeAccNum": 20},
-                {"date": "113/11/21", "keepRate": 164.2, "callAccNum": 80, "exeAccNum": 15}
+                {"date": "113/11/20", "crdAmt": 310000000, "keepRate": 162.5, "belowAccNum": 520, "callAccNum": 100, "callAmt": 45000, "exeAccNum": 20, "exeAmt": 8000},
+                {"date": "113/11/21", "crdAmt": 312500000, "keepRate": 164.2, "belowAccNum": 410, "callAccNum": 80, "callAmt": 32000, "exeAccNum": 15, "exeAmt": 6000}
               ]
             }
         """.trimIndent()
@@ -153,5 +153,14 @@ class ApiRetryResilienceTest {
         assertEquals(2, getAttempts())
         assertEquals(listOf(400L), recordedDelays)
         assertEquals(164.2, snapshot!!.keepRate, 0.001)
+        assertEquals(1.7, snapshot.keepRateChange!!, 0.001)
+        assertEquals(410L, snapshot.belowAccNum)
+        assertEquals(312500000L, snapshot.crdAmt)
+        assertEquals(2500000L, snapshot.crdAmtChange)
+        assertEquals(32000L, snapshot.callAmt)
+        assertEquals(6000L, snapshot.exeAmt)
+        assertEquals(2, snapshot.historyPoints.size)
+        assertEquals("113/11/20", snapshot.historyPoints[0].date)
+        assertEquals("113/11/21", snapshot.historyPoints[1].date)
     }
 }

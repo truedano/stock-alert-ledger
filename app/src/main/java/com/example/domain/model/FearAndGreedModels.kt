@@ -9,6 +9,29 @@ import com.example.ui.theme.TaiwanRed
 import com.example.ui.theme.TaiwanRedContainer
 import kotlinx.serialization.Serializable
 
+fun classifySentiment(score: Double, rating: String = ""): SentimentClassification = when {
+    rating.contains("extreme fear", ignoreCase = true) || score < 25.0 -> SentimentClassification.EXTREME_FEAR
+    rating.contains("extreme greed", ignoreCase = true) || score >= 75.0 -> SentimentClassification.EXTREME_GREED
+    rating.contains("fear", ignoreCase = true) || score < 45.0 -> SentimentClassification.FEAR
+    rating.contains("greed", ignoreCase = true) || score >= 55.0 -> SentimentClassification.GREED
+    else -> SentimentClassification.NEUTRAL
+}
+
+@Serializable
+data class FearAndGreedSubIndicator(
+    val key: String,
+    val nameZh: String,
+    val descriptionZh: String,
+    val score: Double,
+    val rating: String = "",
+) {
+    val roundedScore: Int
+        get() = score.toInt().coerceIn(0, 100)
+
+    val classification: SentimentClassification
+        get() = classifySentiment(score, rating)
+}
+
 @Serializable
 data class FearAndGreedData(
     val score: Double,
@@ -18,18 +41,13 @@ data class FearAndGreedData(
     val previousOneWeek: Double? = null,
     val previousOneMonth: Double? = null,
     val previousOneYear: Double? = null,
+    val subIndicators: List<FearAndGreedSubIndicator> = emptyList(),
 ) {
     val roundedScore: Int
         get() = score.toInt().coerceIn(0, 100)
 
     val ratingClassification: SentimentClassification
-        get() = when {
-            rating.contains("extreme fear", ignoreCase = true) || score < 25.0 -> SentimentClassification.EXTREME_FEAR
-            rating.contains("extreme greed", ignoreCase = true) || score >= 75.0 -> SentimentClassification.EXTREME_GREED
-            rating.contains("fear", ignoreCase = true) || score < 45.0 -> SentimentClassification.FEAR
-            rating.contains("greed", ignoreCase = true) || score >= 55.0 -> SentimentClassification.GREED
-            else -> SentimentClassification.NEUTRAL
-        }
+        get() = classifySentiment(score, rating)
 
     val localizedRating: String
         get() = ratingClassification.displayNameZh
