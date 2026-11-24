@@ -20,8 +20,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ShowChart
 import androidx.compose.material.icons.automirrored.rounded.ShowChart
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
+import androidx.compose.material.icons.outlined.QueryStats
 import androidx.compose.material.icons.outlined.Science
 import androidx.compose.material.icons.rounded.AccountBalanceWallet
+import androidx.compose.material.icons.rounded.QueryStats
 import androidx.compose.material.icons.rounded.Science
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -69,6 +71,7 @@ import com.example.ui.components.BuyRecordDialog
 import com.example.ui.screens.AlertLogScreen
 import com.example.ui.screens.PortfolioScreen
 import com.example.ui.screens.SimulatorScreen
+import com.example.ui.screens.ValuationScreen
 import com.example.ui.screens.WatchlistScreen
 import com.example.ui.theme.BrandSky
 import com.example.ui.theme.BrandSkyContainer
@@ -88,6 +91,9 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data object WatchlistRoute
+
+@Serializable
+data object ValuationRoute
 
 @Serializable
 data object PortfolioRoute
@@ -199,6 +205,7 @@ fun StockAssistantRoot(
     val snackbarHostState = remember { SnackbarHostState() }
 
     val watchlistState by viewModel.watchlistUiState.collectAsStateWithLifecycle()
+    val valuationUiState by viewModel.valuationUiState.collectAsStateWithLifecycle()
     val portfolioUiState by viewModel.portfolioUiState.collectAsStateWithLifecycle()
     val lookupState by viewModel.lookupState.collectAsStateWithLifecycle()
     val quickBuyPrefill by viewModel.quickBuyDialogPrefill.collectAsStateWithLifecycle()
@@ -274,10 +281,11 @@ fun StockAssistantRoot(
     }
 
     val watchlistLabel = stringResource(R.string.tab_watchlist)
+    val valuationLabel = stringResource(R.string.tab_valuation)
     val portfolioLabel = stringResource(R.string.tab_portfolio)
     val simulatorLabel = stringResource(R.string.tab_simulator)
 
-    val tabs = remember(watchlistLabel, portfolioLabel, simulatorLabel) {
+    val tabs = remember(watchlistLabel, valuationLabel, portfolioLabel, simulatorLabel) {
         listOf(
             TopLevelTab(
                 route = WatchlistRoute,
@@ -285,6 +293,13 @@ fun StockAssistantRoot(
                 selectedIcon = Icons.AutoMirrored.Rounded.ShowChart,
                 unselectedIcon = Icons.AutoMirrored.Outlined.ShowChart,
                 testTag = "nav_watchlist",
+            ),
+            TopLevelTab(
+                route = ValuationRoute,
+                label = valuationLabel,
+                selectedIcon = Icons.Rounded.QueryStats,
+                unselectedIcon = Icons.Outlined.QueryStats,
+                testTag = "nav_valuation",
             ),
             TopLevelTab(
                 route = PortfolioRoute,
@@ -423,6 +438,17 @@ fun StockAssistantRoot(
                             onQuickBuyClick = viewModel::openQuickBuyFromRule,
                             onAlertLogClick = { navController.navigate(AlertLogRoute) },
                             onAboutAppClick = { showAboutDialog = true },
+                        )
+                    }
+
+                    composable<ValuationRoute> {
+                        ValuationScreen(
+                            uiState = valuationUiState,
+                            onEnsureLoaded = viewModel::ensureValuationLoaded,
+                            onSelectMarket = viewModel::setValuationMarket,
+                            onToggleSortMode = viewModel::setValuationSortMode,
+                            onRefresh = { viewModel.refreshValuationRadar(forceRefresh = true) },
+                            onCreatePriceAlert = viewModel::createValuationPriceAlert,
                         )
                     }
 

@@ -38,6 +38,7 @@ class MarketDataRepository(
     private val fearAndGreedService: com.example.data.remote.FearAndGreedService = com.example.data.remote.FearAndGreedService(),
     private val tickerSearchService: com.example.data.remote.TickerSearchService? = null,
     private val taifexFuturesService: com.example.data.remote.TaifexFuturesService = com.example.data.remote.TaifexFuturesService(),
+    private val valuationRemoteService: com.example.data.remote.ValuationRemoteService? = null,
     private val watchlistDao: WatchlistDao,
     private val cachedQuoteDao: CachedQuoteDao,
     private val alertLogDao: com.example.data.local.AlertLogDao? = null,
@@ -53,6 +54,17 @@ class MarketDataRepository(
     private var latestFearAndGreed: com.example.domain.model.FearAndGreedData? = null
     private val _futuresChipFlow = MutableStateFlow<TaiwanFuturesChipSnapshot?>(null)
     val futuresChipFlow: StateFlow<TaiwanFuturesChipSnapshot?> = _futuresChipFlow.asStateFlow()
+
+    private val _valuationSnapshotFlow = MutableStateFlow<com.example.domain.model.ValuationRadarSnapshot?>(null)
+    val valuationSnapshotFlow: StateFlow<com.example.domain.model.ValuationRadarSnapshot?> = _valuationSnapshotFlow.asStateFlow()
+
+    suspend fun fetchValuationRadar(forceRefresh: Boolean = false): com.example.domain.model.ValuationRadarSnapshot? = withContext(Dispatchers.IO) {
+        val snap = valuationRemoteService?.fetchValuationRadar(forceRefresh = forceRefresh)
+        if (snap != null) {
+            _valuationSnapshotFlow.value = snap
+        }
+        snap ?: _valuationSnapshotFlow.value
+    }
 
     suspend fun fetchFearAndGreed(forceRefresh: Boolean = false): com.example.domain.model.FearAndGreedData? = withContext(Dispatchers.IO) {
         val data = fearAndGreedService.fetchFearAndGreed(forceRefresh)

@@ -29,6 +29,9 @@ class AppContainer(context: Context) {
     val taifexFuturesService: com.example.data.remote.TaifexFuturesService by lazy {
         com.example.data.remote.TaifexFuturesService()
     }
+    val valuationRemoteService: com.example.data.remote.ValuationRemoteService by lazy {
+        com.example.data.remote.ValuationRemoteService(context = appContext)
+    }
     val updateManager: AppUpdateManager by lazy { AppUpdateManager(appContext) }
     val backupRepository: BackupRepository by lazy {
         BackupRepository(
@@ -46,6 +49,7 @@ class AppContainer(context: Context) {
             fearAndGreedService = fearAndGreedService,
             tickerSearchService = tickerSearchService,
             taifexFuturesService = taifexFuturesService,
+            valuationRemoteService = valuationRemoteService,
             watchlistDao = database.watchlistDao(),
             cachedQuoteDao = database.cachedQuoteDao(),
             alertLogDao = database.alertLogDao(),

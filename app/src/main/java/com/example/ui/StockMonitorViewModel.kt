@@ -99,6 +99,14 @@ data class PortfolioUiState(
     val filteredRecords: List<BuyRecordEntity> = emptyList(),
 )
 
+data class ValuationUiState(
+    val selectedMarket: com.example.domain.model.ValuationMarket = com.example.domain.model.ValuationMarket.TW,
+    val sortByMarginOfSafety: Boolean = false,
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null,
+    val snapshot: com.example.domain.model.ValuationRadarSnapshot? = null,
+)
+
 sealed interface LookupUiState {
     data object Idle : LookupUiState
     data object Loading : LookupUiState
@@ -141,6 +149,31 @@ class StockMonitorViewModel(
 
     private val _marginSnapshotFlow = MutableStateFlow<com.example.data.remote.MarketMarginSnapshot?>(null)
     private val _fearAndGreedFlow = MutableStateFlow<com.example.domain.model.FearAndGreedData?>(null)
+
+    private val _valuationMarket = MutableStateFlow(com.example.domain.model.ValuationMarket.TW)
+    private val _valuationSortByMargin = MutableStateFlow(false)
+    private val _valuationLoading = MutableStateFlow(false)
+    private val _valuationError = MutableStateFlow<String?>(null)
+
+    val valuationUiState: StateFlow<ValuationUiState> = combine(
+        _valuationMarket,
+        _valuationSortByMargin,
+        _valuationLoading,
+        _valuationError,
+        marketRepo.valuationSnapshotFlow,
+    ) { market, sortByMargin, loading, error, snapshot ->
+        ValuationUiState(
+            selectedMarket = market,
+            sortByMarginOfSafety = sortByMargin,
+            isLoading = loading,
+            errorMessage = error,
+            snapshot = snapshot,
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = ValuationUiState(),
+    )
 
     init {
         // 進入 App 時背景非同步抓取恐懼貪婪指數、台指期籌碼與全市場維持率
@@ -721,6 +754,82 @@ class StockMonitorViewModel(
 
     fun consumeSnackbar() {
         _snackbarMessage.value = null
+    }
+
+    fun setValuationMarket(market: com.example.domain.model.ValuationMarket) {
+        _valuationMarket.value = market
+    }
+
+    fun setValuationSortMode(byMarginOfSafety: Boolean) {
+        _valuationSortByMargin.value = byMarginOfSafety
+    }
+
+    fun ensureValuationLoaded() {
+        if (marketRepo.valuationSnapshotFlow.value == null && !_valuationLoading.value) {
+            refreshValuationRadar(forceRefresh = false)
+        }
+    }
+
+    fun refreshValuationRadar(forceRefresh: Boolean = true) {
+        if (_valuationLoading.value) return
+        viewModelScope.launch {
+            _valuationLoading.value = true
+            _valuationError.value = null
+            try {
+                val snap = marketRepo.fetchValuationRadar(forceRefresh = forceRefresh)
+                if (snap == null || (snap.twTop10.isEmpty() && snap.usTop10.isEmpty())) {
+                    _valuationError.value = "無法取得台美前十大基本面資料，請檢查網路連線後重試"
+                } else if (forceRefresh) {
+                    _snackbarMessage.value = "已自動校正台美前十大名單與 5 年歷史估值分位"
+                }
+            } catch (e: Exception) {
+                _valuationError.value = "估值資料載入失敗：${e.localizedMessage ?: "未知錯誤"}"
+            } finally {
+                _valuationLoading.value = false
+            }
+        }
+    }
+
+    fun createValuationPriceAlert(
+        item: com.example.domain.model.StockValuationItem,
+        useCheapPrice: Boolean,
+    ) {
+        viewModelScope.launch {
+            val rawTarget = if (useCheapPrice) {
+                item.activePriceBand.cheapPrice
+            } else {
+                item.activePriceBand.fairPrice
+            }
+            val roundedTarget = com.example.domain.model.ValuationCalculator.roundTargetPrice(
+                price = rawTarget,
+                currency = item.currency,
+            )
+            if (roundedTarget <= 0.0) return@launch
+
+            val initialQuote = runCatching {
+                (marketRepo.lookupTicker(item.symbol) as? TickerLookupResult.Success)?.quote
+            }.getOrNull()
+
+            val defaultAmount = if (item.currency == MarketCurrency.TWD) 30_000.0 else 1_000.0
+            val condition = com.example.domain.model.PriceTargetCondition(
+                targetPrice = roundedTarget,
+                direction = com.example.domain.model.PriceTargetDirection.BELOW_OR_EQUAL,
+                tolerancePercent = 0.0,
+                autoDisableOnTrigger = true,
+            )
+            marketRepo.saveRule(
+                existingId = null,
+                symbol = item.symbol,
+                displaySymbol = item.displaySymbol,
+                name = item.name,
+                currency = item.currency,
+                condition = condition,
+                plannedBuyAmount = defaultAmount,
+                initialQuote = initialQuote,
+            )
+            val tierName = if (useCheapPrice) "便宜價" else "合理價"
+            _snackbarMessage.value = "已將 ${item.name} ($tierName ${Formatters.formatPrice(roundedTarget, item.currency)}) 加入監控提醒"
+        }
     }
 
     class Factory(private val application: Application) : ViewModelProvider.Factory {

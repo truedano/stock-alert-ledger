@@ -7,6 +7,7 @@
     <string name="foreground_service_running_title">股價高頻監控中（每分鐘）</string>
     <string name="foreground_service_running_desc">正在背景即時追蹤自選股指標與價格條件</string>
     <string name="tab_watchlist">監控提醒</string>
+    <string name="tab_valuation">估值雷達</string>
     <string name="tab_portfolio">成交與成本</string>
     <string name="tab_simulator">資料與模擬</string>
 </resources>
