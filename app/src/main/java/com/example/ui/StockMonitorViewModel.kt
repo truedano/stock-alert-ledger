@@ -796,12 +796,14 @@ class StockMonitorViewModel(
     fun createValuationPriceAlert(
         item: com.example.domain.model.StockValuationItem,
         useCheapPrice: Boolean,
+        overrideBand: com.example.domain.model.PriceBand? = null,
     ) {
         viewModelScope.launch {
+            val targetBand = overrideBand ?: item.activePriceBand
             val rawTarget = if (useCheapPrice) {
-                item.activePriceBand.cheapPrice
+                targetBand.cheapPrice
             } else {
-                item.activePriceBand.fairPrice
+                targetBand.fairPrice
             }
             val roundedTarget = com.example.domain.model.ValuationCalculator.roundTargetPrice(
                 price = rawTarget,

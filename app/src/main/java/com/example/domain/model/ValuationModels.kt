@@ -465,16 +465,8 @@ object ValuationCalculator {
             expensivePrice = price * 1.15,
         )
 
-        val tier = when {
-            price <= activePriceBand.cheapPrice -> ValuationTier.CHEAP
-            price <= activePriceBand.fairPrice -> ValuationTier.FAIR_LOW
-            price <= activePriceBand.expensivePrice -> ValuationTier.FAIR_HIGH
-            else -> ValuationTier.EXPENSIVE
-        }
-
-        val marginOfSafetyPercent = if (activePriceBand.fairPrice > 0.0) {
-            ((price - activePriceBand.fairPrice) / activePriceBand.fairPrice) * 100.0
-        } else 0.0
+        val tier = computeTier(price, activePriceBand)
+        val marginOfSafetyPercent = computeMarginOfSafetyPercent(price, activePriceBand)
 
         val impliedGrowth = if (trailingEps != null && trailingEps > 0.0 && forwardEps != null && forwardEps > 0.0) {
             ((forwardEps / trailingEps) - 1.0) * 100.0
@@ -540,6 +532,16 @@ object ValuationCalculator {
             }
         }
     }
+
+    fun computeTier(price: Double, band: PriceBand): ValuationTier = when {
+        price <= band.cheapPrice -> ValuationTier.CHEAP
+        price <= band.fairPrice -> ValuationTier.FAIR_LOW
+        price <= band.expensivePrice -> ValuationTier.FAIR_HIGH
+        else -> ValuationTier.EXPENSIVE
+    }
+
+    fun computeMarginOfSafetyPercent(price: Double, band: PriceBand): Double =
+        if (band.fairPrice > 0.0) ((price - band.fairPrice) / band.fairPrice) * 100.0 else 0.0
 
     fun roundTargetPrice(price: Double, currency: MarketCurrency): Double {
         if (price <= 0.0 || price.isNaN() || price.isInfinite()) return 0.0

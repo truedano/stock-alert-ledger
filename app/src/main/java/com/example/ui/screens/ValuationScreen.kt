@@ -64,6 +64,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.domain.model.Formatters
 import com.example.domain.model.MarketCurrency
+import com.example.domain.model.PriceBand
 import com.example.domain.model.StockValuationItem
 import com.example.domain.model.ValuationCalculator
 import com.example.domain.model.ValuationMarket
@@ -97,7 +98,7 @@ fun ValuationScreen(
     onSelectMarket: (ValuationMarket) -> Unit,
     onToggleSortMode: (Boolean) -> Unit,
     onRefresh: () -> Unit,
-    onCreatePriceAlert: (StockValuationItem, Boolean) -> Unit,
+    onCreatePriceAlert: (StockValuationItem, Boolean, PriceBand?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showGuideDialog by remember { mutableStateOf(false) }
@@ -229,8 +230,8 @@ fun ValuationScreen(
                     ) { item ->
                         ValuationStockCard(
                             item = item,
-                            onCreateCheapAlert = { onCreatePriceAlert(item, true) },
-                            onCreateFairAlert = { onCreatePriceAlert(item, false) },
+                            onCreateCheapAlert = { band -> onCreatePriceAlert(item, true, band) },
+                            onCreateFairAlert = { band -> onCreatePriceAlert(item, false, band) },
                         )
                     }
                 }
@@ -430,19 +431,44 @@ private fun ValuationControlBar(
     }
 }
 
+private enum class ValuationBasis(val label: String) {
+    FORWARD_PE("預估 PE"),
+    TRAILING_PE("過去 PE"),
+    PB("淨值比 P/B"),
+}
+
 @Composable
 private fun ValuationStockCard(
     item: StockValuationItem,
-    onCreateCheapAlert: () -> Unit,
-    onCreateFairAlert: () -> Unit,
+    onCreateCheapAlert: (PriceBand) -> Unit,
+    onCreateFairAlert: (PriceBand) -> Unit,
 ) {
-    val tierColor = when (item.tier) {
+    val defaultBasis = remember(item.symbol, item.primaryMethod, item.forwardPePriceBand, item.trailingPePriceBand, item.pbPriceBand) {
+        when {
+            item.primaryMethod == ValuationMethod.PB_PRIORITY && item.pbPriceBand != null -> ValuationBasis.PB
+            item.forwardPePriceBand != null -> ValuationBasis.FORWARD_PE
+            item.trailingPePriceBand != null -> ValuationBasis.TRAILING_PE
+            item.pbPriceBand != null -> ValuationBasis.PB
+            else -> ValuationBasis.FORWARD_PE
+        }
+    }
+    var selectedBasis by remember(item.symbol) { mutableStateOf(defaultBasis) }
+    val selectedBand = when (selectedBasis) {
+        ValuationBasis.FORWARD_PE -> item.forwardPePriceBand
+        ValuationBasis.TRAILING_PE -> item.trailingPePriceBand
+        ValuationBasis.PB -> item.pbPriceBand
+    } ?: item.activePriceBand
+
+    val activeTier = ValuationCalculator.computeTier(item.currentPrice, selectedBand)
+    val activeMosPercent = ValuationCalculator.computeMarginOfSafetyPercent(item.currentPrice, selectedBand)
+
+    val tierColor = when (activeTier) {
         ValuationTier.CHEAP -> TaiwanGreen
         ValuationTier.FAIR_LOW -> BrandSky
         ValuationTier.FAIR_HIGH -> AlertAmber
         ValuationTier.EXPENSIVE -> TaiwanRed
     }
-    val tierContainer = when (item.tier) {
+    val tierContainer = when (activeTier) {
         ValuationTier.CHEAP -> TaiwanGreenContainer
         ValuationTier.FAIR_LOW -> BrandSkyContainer
         ValuationTier.FAIR_HIGH -> AlertAmberContainer
@@ -457,10 +483,10 @@ private fun ValuationStockCard(
         else -> TextSecondary
     }
 
-    val mosText = if (item.marginOfSafetyPercent <= 0.0) {
-        String.format(Locale.US, "較合理價折價 %.1f%%", kotlin.math.abs(item.marginOfSafetyPercent))
+    val mosText = if (activeMosPercent <= 0.0) {
+        String.format(Locale.US, "折價 %.1f%%", kotlin.math.abs(activeMosPercent))
     } else {
-        String.format(Locale.US, "較合理價溢價 +%.1f%%", item.marginOfSafetyPercent)
+        String.format(Locale.US, "溢價 +%.1f%%", activeMosPercent)
     }
 
     Surface(
@@ -486,7 +512,7 @@ private fun ValuationStockCard(
             ) {
                 Row(
                     modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Surface(
@@ -512,18 +538,22 @@ private fun ValuationStockCard(
                             overflow = TextOverflow.Ellipsis,
                         )
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
                                 text = item.displaySymbol,
                                 style = FinancialTextStyles.numericSmall,
                                 color = TextSecondary,
+                                maxLines = 1,
+                                softWrap = false,
                             )
                             Text(
-                                text = "· 市值 ${ValuationCalculator.formatMarketCap(item.marketCap, item.currency)}",
+                                text = "· ${ValuationCalculator.formatMarketCap(item.marketCap, item.currency)}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = TextMuted,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }
@@ -550,45 +580,54 @@ private fun ValuationStockCard(
             // Tier & Valuation Method Badges
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
+                Box(modifier = Modifier.weight(1f)) {
                     Surface(
                         shape = RoundedCornerShape(8.dp),
                         color = tierContainer,
                         border = BorderStroke(1.dp, tierColor.copy(alpha = 0.45f)),
                     ) {
                         Text(
-                            text = "${item.tier.label} · $mosText",
+                            text = "${activeTier.label} · $mosText",
                             style = MaterialTheme.typography.labelSmall,
                             color = tierColor,
                             fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         )
                     }
                 }
 
+                val isCustomBasis = selectedBasis != defaultBasis
                 Surface(
+                    onClick = { selectedBasis = defaultBasis },
+                    enabled = isCustomBasis,
                     shape = RoundedCornerShape(8.dp),
-                    color = if (item.primaryMethod == ValuationMethod.PB_PRIORITY) {
-                        BrandIndigo.copy(alpha = 0.16f)
-                    } else {
-                        SurfaceCardHigh
+                    color = when {
+                        isCustomBasis -> BrandSkyContainer
+                        item.primaryMethod == ValuationMethod.PB_PRIORITY -> BrandIndigo.copy(alpha = 0.16f)
+                        else -> SurfaceCardHigh
                     },
+                    border = if (isCustomBasis) BorderStroke(1.dp, BrandSky.copy(alpha = 0.45f)) else null,
                 ) {
                     Text(
-                        text = if (item.primaryMethod == ValuationMethod.PB_PRIORITY) {
-                            "★ P/B 淨值主導"
-                        } else {
-                            "預估 PE 主導"
+                        text = when {
+                            isCustomBasis -> "${selectedBasis.label}評估 · 點擊重置"
+                            item.primaryMethod == ValuationMethod.PB_PRIORITY -> "★ P/B 淨值主導"
+                            else -> "預估 PE 主導"
                         },
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (item.primaryMethod == ValuationMethod.PB_PRIORITY) BrandIndigo else TextSecondary,
+                        color = when {
+                            isCustomBasis -> BrandSky
+                            item.primaryMethod == ValuationMethod.PB_PRIORITY -> BrandIndigo
+                            else -> TextSecondary
+                        },
                         fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        softWrap = false,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                     )
                 }
@@ -600,17 +639,23 @@ private fun ValuationStockCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 ValuationMetricCell(
-                    label = "預估 PE",
+                    label = if (defaultBasis == ValuationBasis.FORWARD_PE) "★ 預估 PE" else "預估 PE",
                     value = ValuationCalculator.formatMultiple(item.forwardPe),
                     subValue = "預估EPS ${ValuationCalculator.formatEps(item.forwardEps, item.currency)}",
-                    highlight = item.primaryMethod == ValuationMethod.PE_PRIORITY && item.forwardPe != null,
+                    highlight = selectedBasis == ValuationBasis.FORWARD_PE,
+                    onClick = if (item.forwardPePriceBand != null) {
+                        { selectedBasis = ValuationBasis.FORWARD_PE }
+                    } else null,
                     modifier = Modifier.weight(1f),
                 )
                 ValuationMetricCell(
                     label = "過去 PE",
                     value = ValuationCalculator.formatMultiple(item.trailingPe),
                     subValue = "TTM ${ValuationCalculator.formatEps(item.trailingEps, item.currency)}",
-                    highlight = false,
+                    highlight = selectedBasis == ValuationBasis.TRAILING_PE,
+                    onClick = if (item.trailingPePriceBand != null) {
+                        { selectedBasis = ValuationBasis.TRAILING_PE }
+                    } else null,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -677,19 +722,26 @@ private fun ValuationStockCard(
                 }
 
                 ValuationMetricCell(
-                    label = if (item.primaryMethod == ValuationMethod.PB_PRIORITY) "★ 淨值比 P/B" else "淨值比 P/B",
+                    label = if (defaultBasis == ValuationBasis.PB) "★ 淨值比 P/B" else "淨值比 P/B",
                     value = ValuationCalculator.formatMultiple(item.priceToBook),
                     subValue = "淨值 ${ValuationCalculator.formatEps(item.bookValuePerShare, item.currency)}",
-                    highlight = item.primaryMethod == ValuationMethod.PB_PRIORITY,
+                    highlight = selectedBasis == ValuationBasis.PB,
+                    onClick = if (item.pbPriceBand != null) {
+                        { selectedBasis = ValuationBasis.PB }
+                    } else null,
                     modifier = Modifier.weight(1f),
                 )
             }
 
             // Valuation River / Gauge Bar
-            ValuationRiverBar(item = item)
+            ValuationRiverBar(
+                item = item,
+                band = selectedBand,
+                usePbBand = selectedBasis == ValuationBasis.PB,
+            )
 
             // Cross-check secondary valuation reference
-            val secondarySummary = buildSecondarySummary(item)
+            val secondarySummary = buildSecondarySummary(item, selectedBasis)
             if (secondarySummary.isNotBlank()) {
                 Text(
                     text = secondarySummary,
@@ -701,59 +753,89 @@ private fun ValuationStockCard(
             HorizontalDivider(color = HairlineBorder)
 
             // Quick Alert Action Buttons
-            val cheapRounded = ValuationCalculator.roundTargetPrice(item.activePriceBand.cheapPrice, item.currency)
-            val fairRounded = ValuationCalculator.roundTargetPrice(item.activePriceBand.fairPrice, item.currency)
+            val cheapRounded = ValuationCalculator.roundTargetPrice(selectedBand.cheapPrice, item.currency)
+            val fairRounded = ValuationCalculator.roundTargetPrice(selectedBand.fairPrice, item.currency)
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 OutlinedButton(
-                    onClick = onCreateCheapAlert,
+                    onClick = { onCreateCheapAlert(selectedBand) },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(10.dp),
                     border = BorderStroke(1.dp, TaiwanGreen.copy(alpha = 0.6f)),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.NotificationsActive,
-                        contentDescription = null,
-                        tint = TaiwanGreen,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "設便宜價 ${Formatters.formatPrice(cheapRounded, item.currency)}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TaiwanGreen,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.NotificationsActive,
+                                contentDescription = null,
+                                tint = TaiwanGreen,
+                                modifier = Modifier.size(14.dp),
+                            )
+                            Text(
+                                text = "設便宜價",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TaiwanGreen,
+                                maxLines = 1,
+                            )
+                        }
+                        Text(
+                            text = Formatters.formatPrice(cheapRounded, item.currency),
+                            style = FinancialTextStyles.numericSmall,
+                            color = TaiwanGreen,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
 
                 OutlinedButton(
-                    onClick = onCreateFairAlert,
+                    onClick = { onCreateFairAlert(selectedBand) },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(10.dp),
                     border = BorderStroke(1.dp, BrandSky.copy(alpha = 0.6f)),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.NotificationsActive,
-                        contentDescription = null,
-                        tint = BrandSky,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "設合理價 ${Formatters.formatPrice(fairRounded, item.currency)}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = BrandSky,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.NotificationsActive,
+                                contentDescription = null,
+                                tint = BrandSky,
+                                modifier = Modifier.size(14.dp),
+                            )
+                            Text(
+                                text = "設合理價",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = BrandSky,
+                                maxLines = 1,
+                            )
+                        }
+                        Text(
+                            text = Formatters.formatPrice(fairRounded, item.currency),
+                            style = FinancialTextStyles.numericSmall,
+                            color = BrandSky,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
             }
         }
@@ -766,9 +848,12 @@ private fun ValuationMetricCell(
     value: String,
     subValue: String,
     highlight: Boolean,
+    onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     Surface(
+        onClick = onClick ?: {},
+        enabled = onClick != null,
         modifier = modifier,
         shape = RoundedCornerShape(12.dp),
         color = if (highlight) BrandSkyContainer.copy(alpha = 0.45f) else SurfaceCardHigh,
@@ -801,8 +886,11 @@ private fun ValuationMetricCell(
 }
 
 @Composable
-private fun ValuationRiverBar(item: StockValuationItem) {
-    val band = item.activePriceBand
+private fun ValuationRiverBar(
+    item: StockValuationItem,
+    band: PriceBand,
+    usePbBand: Boolean,
+) {
     val minRange = band.cheapPrice * 0.85
     val maxRange = band.expensivePrice * 1.15
     val span = (maxRange - minRange).coerceAtLeast(1e-6)
@@ -812,12 +900,8 @@ private fun ValuationRiverBar(item: StockValuationItem) {
     val expFrac = ((band.expensivePrice - minRange) / span).toFloat().coerceIn(fairFrac + 0.05f, 0.95f)
     val currentFrac = ((item.currentPrice - minRange) / span).toFloat().coerceIn(0.02f, 0.98f)
 
-    val activeBand = if (item.primaryMethod == ValuationMethod.PB_PRIORITY && item.pbPriceBand != null) {
-        item.pbBand
-    } else {
-        item.peBand
-    }
-    val metricUnit = if (item.primaryMethod == ValuationMethod.PB_PRIORITY && item.pbPriceBand != null) "PB" else "PE"
+    val activeBand = if (usePbBand) item.pbBand else item.peBand
+    val metricUnit = if (usePbBand) "PB" else "PE"
     val calSource = if (activeBand.isAutoCalibrated) {
         "5年歷史${metricUnit}自動校正(${activeBand.sampleCount}季)"
     } else {
@@ -831,27 +915,41 @@ private fun ValuationRiverBar(item: StockValuationItem) {
             .padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Row(
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(
-                text = "$calSource · 倍數區間",
+                text = calSource,
                 style = MaterialTheme.typography.labelSmall,
                 color = TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
-            Text(
-                text = String.format(
-                    Locale.US,
-                    "%.1fx / %.1fx / %.1fx",
-                    activeBand.lowMultiple,
-                    activeBand.fairMultiple,
-                    activeBand.highMultiple,
-                ),
-                style = FinancialTextStyles.numericSmall,
-                color = BrandSky,
-                fontWeight = FontWeight.SemiBold,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "倍數區間",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextMuted,
+                )
+                Text(
+                    text = String.format(
+                        Locale.US,
+                        "%.1fx / %.1fx / %.1fx",
+                        activeBand.lowMultiple,
+                        activeBand.fairMultiple,
+                        activeBand.highMultiple,
+                    ),
+                    style = FinancialTextStyles.numericSmall,
+                    color = BrandSky,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                )
+            }
         }
 
         Canvas(
@@ -907,42 +1005,84 @@ private fun ValuationRiverBar(item: StockValuationItem) {
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text(
-                text = "便宜 ${Formatters.formatPrice(band.cheapPrice, item.currency)}",
-                style = MaterialTheme.typography.labelSmall,
-                color = TaiwanGreen,
-            )
-            Text(
-                text = "合理 ${Formatters.formatPrice(band.fairPrice, item.currency)}",
-                style = MaterialTheme.typography.labelSmall,
-                color = BrandSky,
-            )
-            Text(
-                text = "昂貴 ${Formatters.formatPrice(band.expensivePrice, item.currency)}",
-                style = MaterialTheme.typography.labelSmall,
-                color = TaiwanRed,
-            )
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.Start,
+            ) {
+                Text(
+                    text = "便宜",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TaiwanGreen,
+                )
+                Text(
+                    text = Formatters.formatPrice(band.cheapPrice, item.currency),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TaiwanGreen,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = "合理",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = BrandSky,
+                )
+                Text(
+                    text = Formatters.formatPrice(band.fairPrice, item.currency),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = BrandSky,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.End,
+            ) {
+                Text(
+                    text = "昂貴",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TaiwanRed,
+                )
+                Text(
+                    text = Formatters.formatPrice(band.expensivePrice, item.currency),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TaiwanRed,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }
 
-private fun buildSecondarySummary(item: StockValuationItem): String {
+private fun buildSecondarySummary(
+    item: StockValuationItem,
+    selectedBasis: ValuationBasis,
+): String {
     val parts = ArrayList<String>()
-    if (item.primaryMethod == ValuationMethod.PE_PRIORITY) {
-        item.trailingPePriceBand?.let {
-            parts.add("過去PE合理價 ${Formatters.formatPrice(it.fairPrice, item.currency)}")
-        }
-        item.pbPriceBand?.let {
-            parts.add("P/B淨值合理價 ${Formatters.formatPrice(it.fairPrice, item.currency)}")
-        }
-    } else {
+    if (selectedBasis != ValuationBasis.FORWARD_PE) {
         item.forwardPePriceBand?.let {
             parts.add("預估PE合理價 ${Formatters.formatPrice(it.fairPrice, item.currency)}")
         }
+    }
+    if (selectedBasis != ValuationBasis.TRAILING_PE) {
         item.trailingPePriceBand?.let {
             parts.add("過去PE合理價 ${Formatters.formatPrice(it.fairPrice, item.currency)}")
+        }
+    }
+    if (selectedBasis != ValuationBasis.PB) {
+        item.pbPriceBand?.let {
+            parts.add("P/B淨值合理價 ${Formatters.formatPrice(it.fairPrice, item.currency)}")
         }
     }
     item.dividendYieldPercent?.takeIf { it > 0.0 }?.let {
