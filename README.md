@@ -15,7 +15,16 @@
 
 ### ✨ 核心功能
 
-1. **期交所台指期盤後籌碼抓取升級、智慧快取與台股配色顯示（v1.11.0+）**
+1. **估值雷達：台美前十大權值股雙軌估值與互動式基準切換（v1.12.0+, v1.13.0+）**
+   - **台美前十大權值股自動校正**：即時依市值排序抓取台股與美股前十大權值股（自動排除雙重股別重複佔位與美股掛牌台股 ADR），台股自動對齊證交所官方中文名稱與 PE/PB，並拉取過去 5 年季度 PE / PB 序列自動定錨 P20（便宜）、P50（合理）、P80（昂貴）倍數區間。
+   - **雙軌估值與金融股 P/B 保護**：一般股預設採「預估 PE × 歷史分位」並計算隱含獲利成長率；金融股與波克夏 (`BRK-B`) 自動切換為「每股淨值 × 歷史 P/B 分位」為主導模型。
+   - **互動式估值基準切換（v1.13.0+）**：點擊單張股票卡片四宮格中的 **「預估 PE」**、**「過去 PE」** 或 **「淨值比 P/B」**，即可即時切換評估基準，同步更新該卡的位階標籤、折溢價幅度、估值河流圖與三欄價格，並可點擊狀態標籤一鍵重置回系統預設主導基準。
+   - **一鍵設定目標價監控**：底部「設便宜價 / 設合理價」按鈕會自動依當前選取的評估基準帶入圓整目標價，一鍵加入監控提醒。
+
+2. **三大總經籌碼指標細項面板與歷史追蹤（v1.12.0+）**
+   - 深度升級美股 CNN 恐懼與貪婪指數、台股全市場融資維持率與期交所台指期法人／散戶籌碼看板，提供展開細項面板與歷史追蹤走勢檢視。
+
+3. **期交所台指期盤後籌碼抓取升級、智慧快取與台股配色顯示（v1.11.0+）**
    - **期交所官網盤後 CSV 優先與 OpenAPI 雙重備援**：改為優先抓取台灣期貨交易所官網 MS950/Big5 盤後 CSV（含小台/微台全市場未平倉與三大法人未平倉），精準計算外資大台未平倉日增減口數；若最新交易日盤後法人資料尚未公布則自動回退前一交易日以對齊未平倉分母，官網異常時自動降級回 TAIFEX OpenAPI。
    - **30 分鐘快取與獨立響應式更新**：內建 30 分鐘記憶體快取與手動強制刷新支援，並透過 `StateFlow` 響應式資料流與融資維持率條件解耦，確保進入 App、手動刷新及定期更新流程皆能獨立同步籌碼資料且避免重複請求。
    - **台股紅多綠空視覺升級與盤後標示**：外資淨未平倉與小台/微台散戶多空比改採台股「紅多綠空」獨立著色，介面同步顯示外資未平倉日增減口數、資料日盤後標示與約 15:15 盤後公布時機說明，籌碼解讀更直覺。
@@ -126,7 +135,16 @@
 
 ### ✨ Key Features
 
-1. **Upgraded TAIFEX Post-Market Futures Chip Scraper, Smart Caching & Taiwan Color Styling (v1.11.0+)**
+1. **Valuation Radar: Top 10 TW/US Large-Cap Dual-Track Valuation & Interactive Basis Switching (v1.12.0+, v1.13.0+)**
+   - **Auto-Calibrated Top 10 Market-Cap Leaders**: Dynamically fetches top 10 Taiwan and US equities by market cap (deduplicating dual share classes and Taiwan ADRs), aligns TWSE official Chinese names, and pulls 5-year quarterly PE/PB series to auto-anchor P20 (Cheap), P50 (Fair), and P80 (Expensive) bands.
+   - **Dual-Track PE / P/B Valuation**: Defaults to Forward PE × historical percentiles with implied EPS growth for standard equities, while automatically switching financial stocks and `BRK-B` to P/B-priority valuation.
+   - **Interactive Valuation Basis Switching (v1.13.0+)**: Tap **Forward PE**, **Trailing PE**, or **P/B** directly on any stock card to dynamically switch the evaluation basis—updating the tier badge, margin of safety, valuation river bar, and three-column target prices in place, with one-tap reset to the default primary method.
+   - **One-Tap Price Alert Creation**: "Set Cheap Price" and "Set Fair Price" buttons automatically use the currently selected valuation basis to create target price alerts.
+
+2. **Macro & Chip Indicator Detail Panels & Historical Tracking (v1.12.0+)**
+   - Upgraded detail drill-down panels and historical trend tracking for the US CNN Fear & Greed Index, TWSE market-wide margin maintenance rate, and TAIFEX futures institutional/retail positioning.
+
+3. **Upgraded TAIFEX Post-Market Futures Chip Scraper, Smart Caching & Taiwan Color Styling (v1.11.0+)**
    - **TAIFEX Official CSV Priority with OpenAPI Fallback**: Prioritizes Taiwan Futures Exchange (TAIFEX) official MS950/Big5 post-market CSV reports (Mini-TX/Micro-TX market total OI and institutional OI) to calculate daily changes in Foreign Institutional TX net OI. Automatically falls back one trading day if today's institutional report is not yet published so the OI denominator stays aligned, and degrades gracefully to TAIFEX OpenAPI if official CSV endpoints fail.
    - **30-Minute Memory Cache & Independent Reactive Updates**: Introduces a 30-minute in-memory cache with force-refresh support, exposed via reactive `StateFlow` and decoupled from margin maintenance conditions so futures chip data updates independently on app launch, manual refresh, and periodic real-data syncs without redundant requests.
    - **Taiwan Red-Bullish / Green-Bearish Visuals & Settlement Timestamp**: Applies Taiwan market color conventions (red bullish / green bearish) separately to Foreign net OI and Mini-TX/Micro-TX retail long/short ratios, alongside daily Foreign OI delta, settlement date labels, and post-market (~15:15) publication notes.
