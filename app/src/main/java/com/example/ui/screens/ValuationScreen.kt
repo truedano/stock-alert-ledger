@@ -3,6 +3,7 @@ package com.example.ui.screens
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,7 +26,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.TrendingDown
 import androidx.compose.material.icons.automirrored.rounded.TrendingUp
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.AlertDialog
@@ -40,6 +44,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -66,6 +72,7 @@ import com.example.domain.model.Formatters
 import com.example.domain.model.MarketCurrency
 import com.example.domain.model.PriceBand
 import com.example.domain.model.StockValuationItem
+import com.example.domain.model.TickerSearchCandidate
 import com.example.domain.model.ValuationCalculator
 import com.example.domain.model.ValuationMarket
 import com.example.domain.model.ValuationMethod
@@ -89,6 +96,7 @@ import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 import java.util.Locale
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -100,6 +108,10 @@ fun ValuationScreen(
     onRefresh: () -> Unit,
     onCreatePriceAlert: (StockValuationItem, Boolean, PriceBand?) -> Unit,
     modifier: Modifier = Modifier,
+    onRefreshCustom: () -> Unit = onRefresh,
+    onSearchTickers: (suspend (String) -> List<TickerSearchCandidate>)? = null,
+    onAddCustomStock: (String) -> Unit = {},
+    onRemoveCustomStock: (String) -> Unit = {},
 ) {
     var showGuideDialog by remember { mutableStateOf(false) }
 
@@ -107,10 +119,16 @@ fun ValuationScreen(
         onEnsureLoaded()
     }
 
-    val rawItems = remember(uiState.snapshot, uiState.selectedMarket) {
+    val isCustomTab = uiState.selectedMarket == ValuationMarket.CUSTOM
+    val activeLoading = if (isCustomTab) uiState.customLoading else uiState.isLoading
+    val activeError = if (isCustomTab) uiState.customError else uiState.errorMessage
+    val activeRefresh = if (isCustomTab) onRefreshCustom else onRefresh
+
+    val rawItems = remember(uiState.snapshot, uiState.selectedMarket, uiState.customItems) {
         when (uiState.selectedMarket) {
             ValuationMarket.TW -> uiState.snapshot?.twTop10.orEmpty()
             ValuationMarket.US -> uiState.snapshot?.usTop10.orEmpty()
+            ValuationMarket.CUSTOM -> uiState.customItems
         }
     }
 
@@ -134,8 +152,8 @@ fun ValuationScreen(
         contentWindowInsets = WindowInsets(0.dp),
     ) { innerPadding ->
         PullToRefreshBox(
-            isRefreshing = uiState.isLoading,
-            onRefresh = onRefresh,
+            isRefreshing = activeLoading,
+            onRefresh = activeRefresh,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
@@ -149,8 +167,8 @@ fun ValuationScreen(
                     ValuationHeaderCard(
                         updatedAtMs = uiState.snapshot?.updatedAtMs ?: 0L,
                         isFromCache = uiState.snapshot?.isFromCache == true,
-                        isLoading = uiState.isLoading,
-                        onRefresh = onRefresh,
+                        isLoading = activeLoading,
+                        onRefresh = activeRefresh,
                         onGuideClick = { showGuideDialog = true },
                     )
                 }
@@ -168,7 +186,17 @@ fun ValuationScreen(
                     )
                 }
 
-                if (uiState.isLoading && displayItems.isEmpty()) {
+                if (isCustomTab) {
+                    item {
+                        CustomValuationSearchCard(
+                            isLoading = uiState.customLoading,
+                            onSearchTickers = onSearchTickers,
+                            onAddCustomStock = onAddCustomStock,
+                        )
+                    }
+                }
+
+                if (activeLoading && displayItems.isEmpty()) {
                     item {
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
@@ -185,14 +213,18 @@ fun ValuationScreen(
                             ) {
                                 CircularProgressIndicator(color = BrandSky)
                                 Text(
-                                    text = "正在自動校正台美前十大市值名單並計算 5 年歷史估值分位…",
+                                    text = if (isCustomTab) {
+                                        "正在抓取自選個股報價並計算 5 年歷史估值分位…"
+                                    } else {
+                                        "正在自動校正台美前十大市值名單並計算 5 年歷史估值分位…"
+                                    },
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = TextSecondary,
                                 )
                             }
                         }
                     }
-                } else if (uiState.errorMessage != null && displayItems.isEmpty()) {
+                } else if (activeError != null && displayItems.isEmpty()) {
                     item {
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
@@ -207,12 +239,12 @@ fun ValuationScreen(
                                 verticalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
                                 Text(
-                                    text = uiState.errorMessage,
+                                    text = activeError,
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = TaiwanRed,
                                 )
                                 Button(
-                                    onClick = onRefresh,
+                                    onClick = activeRefresh,
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = BrandSky,
                                         contentColor = CanvasObsidian,
@@ -223,15 +255,48 @@ fun ValuationScreen(
                             }
                         }
                     }
+                } else if (isCustomTab && displayItems.isEmpty()) {
+                    item {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(18.dp),
+                            color = SurfaceCard,
+                            border = BorderStroke(1.dp, HairlineBorder),
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 32.dp, horizontal = 20.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Text(
+                                    text = "尚無自選估值標的",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = TextPrimary,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                Text(
+                                    text = "可在上方搜尋任一台股（如 2303、2603）或美股（如 AMD、AVGO），系統會自動帶入您的監控清單並計算 5 年歷史本益比／淨值比分位。",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextSecondary,
+                                )
+                            }
+                        }
+                    }
                 } else {
                     items(
                         items = displayItems,
                         key = { "${it.market.name}_${it.symbol}" },
                     ) { item ->
+                        val isCustomAdded = isCustomTab && (item.symbol.uppercase(Locale.US) in uiState.customAddedSymbols)
                         ValuationStockCard(
                             item = item,
                             onCreateCheapAlert = { band -> onCreatePriceAlert(item, true, band) },
                             onCreateFairAlert = { band -> onCreatePriceAlert(item, false, band) },
+                            onRemoveCustom = if (isCustomAdded) {
+                                { onRemoveCustomStock(item.symbol) }
+                            } else null,
                         )
                     }
                 }
@@ -363,9 +428,24 @@ private fun ValuationControlBar(
                 ),
             )
             FilterChip(
+                selected = selectedMarket == ValuationMarket.CUSTOM,
+                onClick = { onSelectMarket(ValuationMarket.CUSTOM) },
+                label = { Text("⭐ 自選與搜尋", fontWeight = FontWeight.SemiBold) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = BrandSkyContainer,
+                    selectedLabelColor = BrandSky,
+                    containerColor = SurfaceCard,
+                    labelColor = TextSecondary,
+                ),
+            )
+            FilterChip(
                 selected = !sortByMarginOfSafety,
                 onClick = { onToggleSortMode(false) },
-                label = { Text("市值 #1~#10") },
+                label = {
+                    Text(
+                        if (selectedMarket == ValuationMarket.CUSTOM) "預設排序" else "市值 #1~#10"
+                    )
+                },
                 colors = FilterChipDefaults.filterChipColors(
                     selectedContainerColor = SurfaceCardHigh,
                     selectedLabelColor = TextPrimary,
@@ -438,10 +518,179 @@ private enum class ValuationBasis(val label: String) {
 }
 
 @Composable
+private fun CustomValuationSearchCard(
+    isLoading: Boolean,
+    onSearchTickers: (suspend (String) -> List<TickerSearchCandidate>)?,
+    onAddCustomStock: (String) -> Unit,
+) {
+    var query by remember { mutableStateOf("") }
+    var candidates by remember { mutableStateOf<List<TickerSearchCandidate>>(emptyList()) }
+    var isSearching by remember { mutableStateOf(false) }
+
+    LaunchedEffect(query, onSearchTickers) {
+        val trimmed = query.trim()
+        if (trimmed.isEmpty() || onSearchTickers == null) {
+            candidates = emptyList()
+            isSearching = false
+            return@LaunchedEffect
+        }
+        isSearching = true
+        delay(250)
+        candidates = runCatching { onSearchTickers(trimmed) }.getOrDefault(emptyList())
+        isSearching = false
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = SurfaceCard,
+        border = BorderStroke(1.dp, HairlineBorder),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    placeholder = {
+                        Text(
+                            text = "搜尋台美股代號或名稱（如 2303、AMD）",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextMuted,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null,
+                            tint = BrandSky,
+                        )
+                    },
+                    trailingIcon = {
+                        if (query.isNotEmpty()) {
+                            IconButton(onClick = {
+                                query = ""
+                                candidates = emptyList()
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "清除搜尋",
+                                    tint = TextSecondary,
+                                )
+                            }
+                        }
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = BrandSky,
+                        unfocusedBorderColor = HairlineBorder,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                    ),
+                )
+                Button(
+                    onClick = {
+                        val target = candidates.firstOrNull()?.symbol ?: query.trim()
+                        if (target.isNotBlank()) {
+                            onAddCustomStock(target)
+                            query = ""
+                            candidates = emptyList()
+                        }
+                    },
+                    enabled = query.trim().isNotEmpty() && !isLoading,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = BrandSky,
+                        contentColor = CanvasObsidian,
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                ) {
+                    Text("加入", fontWeight = FontWeight.Bold)
+                }
+            }
+
+            if (isSearching && candidates.isEmpty()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = BrandSky)
+                    Text(
+                        text = "搜尋符合標的…",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                    )
+                }
+            } else if (candidates.isNotEmpty()) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = SurfaceCardHigh,
+                    border = BorderStroke(1.dp, HairlineBorder),
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        candidates
+                            .filterNot { it.symbol.startsWith("^") }
+                            .take(6)
+                            .forEach { candidate ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            onAddCustomStock(candidate.symbol)
+                                            query = ""
+                                            candidates = emptyList()
+                                        }
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = candidate.name.ifBlank { candidate.symbol },
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = TextPrimary,
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        Text(
+                                            text = "${candidate.symbol} · ${candidate.marketLabel}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = TextSecondary,
+                                            maxLines = 1,
+                                        )
+                                    }
+                                    Text(
+                                        text = "+ 加入估值",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = BrandSky,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                }
+                            }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun ValuationStockCard(
     item: StockValuationItem,
     onCreateCheapAlert: (PriceBand) -> Unit,
     onCreateFairAlert: (PriceBand) -> Unit,
+    onRemoveCustom: (() -> Unit)? = null,
 ) {
     val defaultBasis = remember(item.symbol, item.primaryMethod, item.forwardPePriceBand, item.trailingPePriceBand, item.pbPriceBand) {
         when {
@@ -750,6 +999,14 @@ private fun ValuationStockCard(
                 )
             }
 
+            if (item.isFallbackBand) {
+                Text(
+                    text = "⚠️ 此標的缺乏有效盈餘／淨值數據（可能為虧損中或 ETF），估值區間僅供參考",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = AlertAmber,
+                )
+            }
+
             HorizontalDivider(color = HairlineBorder)
 
             // Quick Alert Action Buttons
@@ -759,6 +1016,7 @@ private fun ValuationStockCard(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 OutlinedButton(
                     onClick = { onCreateCheapAlert(selectedBand) },
@@ -834,6 +1092,16 @@ private fun ValuationStockCard(
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+
+                if (onRemoveCustom != null) {
+                    IconButton(onClick = onRemoveCustom) {
+                        Icon(
+                            imageVector = Icons.Rounded.DeleteOutline,
+                            contentDescription = "從自選估值移除",
+                            tint = TextMuted,
                         )
                     }
                 }

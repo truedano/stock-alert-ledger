@@ -12,6 +12,7 @@ import com.example.domain.model.DataSourceMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
@@ -28,6 +29,7 @@ data class AppPreferencesState(
     val lastSyncTimestamp: Long = 0L,
     val lastSyncMessage: String = "尚未同步報價",
     val simulatedPrices: Map<String, Double> = emptyMap(),
+    val customValuationSymbols: List<String> = emptyList(),
 ) {
     fun simulatedPriceFor(symbol: String): Double? {
         return simulatedPrices[symbol.trim().uppercase()]
@@ -43,10 +45,12 @@ class AppPreferencesRepository(private val context: Context) {
         val LAST_SYNC_TIMESTAMP = longPreferencesKey("last_sync_timestamp")
         val LAST_SYNC_MESSAGE = stringPreferencesKey("last_sync_message")
         val SIMULATED_PRICES_JSON = stringPreferencesKey("simulated_prices_json")
+        val CUSTOM_VALUATION_SYMBOLS_JSON = stringPreferencesKey("custom_valuation_symbols_json")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
     private val mapSerializer = MapSerializer(String.serializer(), Double.serializer())
+    private val listSerializer = ListSerializer(String.serializer())
 
     val preferencesFlow: Flow<AppPreferencesState> = context.appDataStore.data.map { prefs ->
         val modeRaw = prefs[Keys.DATA_SOURCE_MODE]
@@ -61,6 +65,12 @@ class AppPreferencesRepository(private val context: Context) {
                 runCatching { json.decodeFromString(mapSerializer, raw) }.getOrDefault(emptyMap())
             }
             ?: emptyMap()
+        val customSymbols = prefs[Keys.CUSTOM_VALUATION_SYMBOLS_JSON]
+            ?.takeIf { it.isNotBlank() }
+            ?.let { raw ->
+                runCatching { json.decodeFromString(listSerializer, raw) }.getOrDefault(emptyList())
+            }
+            ?: emptyList()
 
         AppPreferencesState(
             dataSourceMode = mode,
@@ -70,6 +80,7 @@ class AppPreferencesRepository(private val context: Context) {
             lastSyncTimestamp = prefs[Keys.LAST_SYNC_TIMESTAMP] ?: 0L,
             lastSyncMessage = prefs[Keys.LAST_SYNC_MESSAGE] ?: "尚未同步報價",
             simulatedPrices = simPrices,
+            customValuationSymbols = customSymbols,
         )
     }
 
@@ -119,6 +130,38 @@ class AppPreferencesRepository(private val context: Context) {
                 ?: emptyMap()
             val updated = current.toMutableMap().apply { put(key, price) }
             prefs[Keys.SIMULATED_PRICES_JSON] = json.encodeToString(mapSerializer, updated)
+        }
+    }
+
+    suspend fun addCustomValuationSymbol(symbol: String) {
+        val normalized = symbol.trim().uppercase()
+        if (normalized.isEmpty()) return
+        context.appDataStore.edit { prefs ->
+            val current = prefs[Keys.CUSTOM_VALUATION_SYMBOLS_JSON]
+                ?.takeIf { it.isNotBlank() }
+                ?.let { raw ->
+                    runCatching { json.decodeFromString(listSerializer, raw) }.getOrDefault(emptyList())
+                }
+                ?: emptyList()
+            if (normalized !in current) {
+                val updated = listOf(normalized) + current
+                prefs[Keys.CUSTOM_VALUATION_SYMBOLS_JSON] = json.encodeToString(listSerializer, updated)
+            }
+        }
+    }
+
+    suspend fun removeCustomValuationSymbol(symbol: String) {
+        val normalized = symbol.trim().uppercase()
+        if (normalized.isEmpty()) return
+        context.appDataStore.edit { prefs ->
+            val current = prefs[Keys.CUSTOM_VALUATION_SYMBOLS_JSON]
+                ?.takeIf { it.isNotBlank() }
+                ?.let { raw ->
+                    runCatching { json.decodeFromString(listSerializer, raw) }.getOrDefault(emptyList())
+                }
+                ?: emptyList()
+            val updated = current.filterNot { it.equals(normalized, ignoreCase = true) }
+            prefs[Keys.CUSTOM_VALUATION_SYMBOLS_JSON] = json.encodeToString(listSerializer, updated)
         }
     }
 }

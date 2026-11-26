@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -106,6 +107,11 @@ data class ValuationUiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val snapshot: com.example.domain.model.ValuationRadarSnapshot? = null,
+    val customItems: List<com.example.domain.model.StockValuationItem> = emptyList(),
+    val customLoading: Boolean = false,
+    val customError: String? = null,
+    val customAddedSymbols: Set<String> = emptySet(),
+    val watchlistSymbols: Set<String> = emptySet(),
 )
 
 sealed interface LookupUiState {
@@ -155,6 +161,40 @@ class StockMonitorViewModel(
     private val _valuationSortByMargin = MutableStateFlow(false)
     private val _valuationLoading = MutableStateFlow(false)
     private val _valuationError = MutableStateFlow<String?>(null)
+    private val _customValuationLoading = MutableStateFlow(false)
+    private val _customValuationError = MutableStateFlow<String?>(null)
+
+    private data class CustomValuationMeta(
+        val items: List<com.example.domain.model.StockValuationItem>,
+        val loading: Boolean,
+        val error: String?,
+        val addedSymbols: Set<String>,
+        val watchlistSymbols: Set<String>,
+    )
+
+    private val customValuationMetaFlow = combine(
+        marketRepo.customValuationFlow,
+        _customValuationLoading,
+        _customValuationError,
+        preferencesState,
+        marketRepo.rulesFlow,
+    ) { items, customLoading, customError, prefs, rules ->
+        val added = prefs.customValuationSymbols
+            .map { it.trim().uppercase(java.util.Locale.US) }
+            .filter { it.isNotEmpty() }
+            .toSet()
+        val watchlist = rules
+            .map { it.symbol.trim().uppercase(java.util.Locale.US) }
+            .filter { it.isNotEmpty() && !it.startsWith("^") }
+            .toSet()
+        CustomValuationMeta(
+            items = items,
+            loading = customLoading,
+            error = customError,
+            addedSymbols = added,
+            watchlistSymbols = watchlist,
+        )
+    }
 
     val valuationUiState: StateFlow<ValuationUiState> = combine(
         _valuationMarket,
@@ -169,6 +209,14 @@ class StockMonitorViewModel(
             isLoading = loading,
             errorMessage = error,
             snapshot = snapshot,
+        )
+    }.combine(customValuationMetaFlow) { base, customMeta ->
+        base.copy(
+            customItems = customMeta.items,
+            customLoading = customMeta.loading,
+            customError = customMeta.error,
+            customAddedSymbols = customMeta.addedSymbols,
+            watchlistSymbols = customMeta.watchlistSymbols,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -761,6 +809,12 @@ class StockMonitorViewModel(
 
     fun setValuationMarket(market: com.example.domain.model.ValuationMarket) {
         _valuationMarket.value = market
+        if (market == com.example.domain.model.ValuationMarket.CUSTOM &&
+            marketRepo.customValuationFlow.value.isEmpty() &&
+            !_customValuationLoading.value
+        ) {
+            refreshCustomValuations(forceRefresh = false)
+        }
     }
 
     fun setValuationSortMode(byMarginOfSafety: Boolean) {
@@ -770,6 +824,84 @@ class StockMonitorViewModel(
     fun ensureValuationLoaded() {
         if (marketRepo.valuationSnapshotFlow.value == null && !_valuationLoading.value) {
             refreshValuationRadar(forceRefresh = false)
+        }
+        if (_valuationMarket.value == com.example.domain.model.ValuationMarket.CUSTOM &&
+            marketRepo.customValuationFlow.value.isEmpty() &&
+            !_customValuationLoading.value
+        ) {
+            refreshCustomValuations(forceRefresh = false)
+        }
+    }
+
+    fun refreshCustomValuations(forceRefresh: Boolean = true) {
+        if (_customValuationLoading.value) return
+        viewModelScope.launch {
+            _customValuationLoading.value = true
+            _customValuationError.value = null
+            try {
+                val prefs = prefsRepo.getSnapshot()
+                val customSymbols = prefs.customValuationSymbols
+                    .map { it.trim().uppercase(java.util.Locale.US) }
+                val watchlistSymbols = marketRepo.rulesFlow.first()
+                    .map { it.symbol.trim().uppercase(java.util.Locale.US) }
+                val combined = (customSymbols + watchlistSymbols)
+                    .filter { it.isNotEmpty() && !it.startsWith("^") }
+                    .distinct()
+
+                if (combined.isEmpty()) {
+                    marketRepo.fetchCustomValuations(emptyList(), forceRefresh = false)
+                } else {
+                    val result = marketRepo.fetchCustomValuations(combined, forceRefresh = forceRefresh)
+                    if (result.isEmpty()) {
+                        _customValuationError.value = "無法取得自選股票的基本面資料，請稍後再試"
+                    } else if (forceRefresh) {
+                        _snackbarMessage.value = "已更新 ${result.size} 檔自選股即時估值"
+                    }
+                }
+            } catch (e: Exception) {
+                _customValuationError.value = "自選估值載入失敗：${e.localizedMessage ?: "未知錯誤"}"
+            } finally {
+                _customValuationLoading.value = false
+            }
+        }
+    }
+
+    fun addCustomValuationStock(symbol: String) {
+        val normalized = symbol.trim().uppercase(java.util.Locale.US)
+        if (normalized.isEmpty() || normalized.startsWith("^")) {
+            _snackbarMessage.value = "指數標的無法進行本益比／淨值比估值"
+            return
+        }
+        viewModelScope.launch {
+            _customValuationLoading.value = true
+            _customValuationError.value = null
+            try {
+                prefsRepo.addCustomValuationSymbol(normalized)
+                val item = marketRepo.fetchAndMergeCustomValuation(normalized)
+                if (item != null) {
+                    _snackbarMessage.value = "已加入 ${item.name} (${item.displaySymbol}) 估值"
+                } else {
+                    _snackbarMessage.value = "找不到 $normalized 的即時報價或基本面資料"
+                }
+            } catch (e: Exception) {
+                _snackbarMessage.value = "加入估值失敗：${e.localizedMessage ?: "未知錯誤"}"
+            } finally {
+                _customValuationLoading.value = false
+            }
+        }
+    }
+
+    fun removeCustomValuationStock(symbol: String) {
+        val normalized = symbol.trim().uppercase(java.util.Locale.US)
+        viewModelScope.launch {
+            prefsRepo.removeCustomValuationSymbol(normalized)
+            val watchlistSymbols = marketRepo.rulesFlow.first()
+                .map { it.symbol.trim().uppercase(java.util.Locale.US) }
+                .toSet()
+            if (normalized !in watchlistSymbols) {
+                marketRepo.removeCustomValuationFromCache(normalized)
+            }
+            _snackbarMessage.value = "已從自選估值移除 $normalized"
         }
     }
 

@@ -8,6 +8,7 @@ import kotlinx.serialization.Serializable
 enum class ValuationMarket(val label: String, val regionCode: String) {
     TW("台股前十大", "tw"),
     US("美股前十大", "us"),
+    CUSTOM("自選與搜尋", "custom"),
 }
 
 @Serializable
@@ -85,6 +86,7 @@ data class StockValuationItem(
     val tier: ValuationTier,
     val marginOfSafetyPercent: Double,
     val impliedEpsGrowthPercent: Double? = null,
+    val isFallbackBand: Boolean = false,
 )
 
 @Serializable
@@ -400,6 +402,14 @@ object ValuationCalculator {
     private fun hasPositive(v: Double?): Boolean =
         v != null && !v.isNaN() && !v.isInfinite() && v > 0.0
 
+    fun isTaiwanSymbol(symbol: String): Boolean {
+        val upper = symbol.trim().uppercase(Locale.US)
+        return upper.endsWith(".TW") || upper.endsWith(".TWO")
+    }
+
+    fun inferMarketForSymbol(symbol: String): ValuationMarket =
+        if (isTaiwanSymbol(symbol)) ValuationMarket.TW else ValuationMarket.US
+
     fun evaluateStockValuation(
         rank: Int,
         raw: RawScreenerQuote,
@@ -410,7 +420,12 @@ object ValuationCalculator {
     ): StockValuationItem {
         val symbol = raw.symbol.trim().uppercase(Locale.US)
         val price = raw.regularMarketPrice
-        val currency = if (market == ValuationMarket.TW) MarketCurrency.TWD else MarketCurrency.USD
+        val isTwSymbol = isTaiwanSymbol(symbol)
+        val currency = if (market == ValuationMarket.TW || (market == ValuationMarket.CUSTOM && isTwSymbol)) {
+            MarketCurrency.TWD
+        } else {
+            MarketCurrency.USD
+        }
 
         val (sanitizedBook, sanitizedPb) = sanitizeBrkB(
             symbol = symbol,
@@ -456,10 +471,12 @@ object ValuationCalculator {
         }
 
         val primaryMethod = determinePrimaryMethod(symbol)
-        val activePriceBand = when (primaryMethod) {
+        val computedBand = when (primaryMethod) {
             ValuationMethod.PB_PRIORITY -> pbPriceBand ?: forwardPriceBand ?: trailingPriceBand
             ValuationMethod.PE_PRIORITY -> forwardPriceBand ?: trailingPriceBand ?: pbPriceBand
-        } ?: PriceBand(
+        }
+        val isFallbackBand = computedBand == null
+        val activePriceBand = computedBand ?: PriceBand(
             cheapPrice = price * 0.85,
             fairPrice = price,
             expensivePrice = price * 1.15,
@@ -473,10 +490,7 @@ object ValuationCalculator {
         } else null
 
         val displayName = resolvedName?.takeIf { it.isNotBlank() }
-            ?: when (market) {
-                ValuationMarket.TW -> BUILTIN_TW_CHINESE_NAMES[symbol]
-                ValuationMarket.US -> BUILTIN_US_CHINESE_NAMES[symbol]
-            }
+            ?: (if (currency == MarketCurrency.TWD) BUILTIN_TW_CHINESE_NAMES[symbol] else BUILTIN_US_CHINESE_NAMES[symbol])
             ?: raw.shortName.ifBlank { raw.longName }.ifBlank { symbol }
 
         return StockValuationItem(
@@ -506,6 +520,7 @@ object ValuationCalculator {
             tier = tier,
             marginOfSafetyPercent = marginOfSafetyPercent,
             impliedEpsGrowthPercent = impliedGrowth,
+            isFallbackBand = isFallbackBand,
         )
     }
 

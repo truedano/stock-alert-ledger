@@ -448,6 +448,10 @@ fun StockAssistantRoot(
                             onSelectMarket = viewModel::setValuationMarket,
                             onToggleSortMode = viewModel::setValuationSortMode,
                             onRefresh = { viewModel.refreshValuationRadar(forceRefresh = true) },
+                            onRefreshCustom = { viewModel.refreshCustomValuations(forceRefresh = true) },
+                            onSearchTickers = viewModel::searchTickerCandidates,
+                            onAddCustomStock = viewModel::addCustomValuationStock,
+                            onRemoveCustomStock = viewModel::removeCustomValuationStock,
                             onCreatePriceAlert = viewModel::createValuationPriceAlert,
                         )
                     }

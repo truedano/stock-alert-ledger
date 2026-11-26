@@ -11,6 +11,7 @@ import com.example.domain.model.ValuationRadarSnapshot
 import java.io.File
 import java.net.URLEncoder
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -86,6 +87,18 @@ class ValuationRemoteService(
     private var cachedCrumb: String? = null
     @Volatile
     private var cachedCrumbAtMs: Long = 0L
+    @Volatile
+    private var cachedTwseMap: Map<String, TwseValuationRow> = emptyMap()
+    @Volatile
+    private var cachedTwseMapAtMs: Long = 0L
+
+    private data class CachedBandPair(
+        val peBand: HistoricalMultipleBand,
+        val pbBand: HistoricalMultipleBand,
+        val fetchedAtMs: Long,
+    )
+
+    private val bandCache = ConcurrentHashMap<String, CachedBandPair>()
 
     suspend fun fetchValuationRadar(forceRefresh: Boolean = false): ValuationRadarSnapshot? = withContext(Dispatchers.IO) {
         val now = clockMs()
@@ -211,6 +224,76 @@ class ValuationRemoteService(
             updatedAtMs = clockMs(),
             isFromCache = false,
         )
+    }
+
+    /**
+     * Evaluates arbitrary user-selected or watchlist symbols on demand.
+     * Reuses cached 5Y historical bands (6h TTL) and TWSE BWIBBU_ALL (30m TTL) so single-stock lookups stay fast.
+     */
+    suspend fun fetchCustomValuations(
+        symbols: List<String>,
+        forceRefresh: Boolean = false,
+    ): List<StockValuationItem> = withContext(Dispatchers.IO) {
+        val cleanSymbols = symbols
+            .map { it.trim().uppercase(Locale.US) }
+            .filter { it.isNotEmpty() && !it.startsWith("^") }
+            .distinct()
+        if (cleanSymbols.isEmpty()) return@withContext emptyList()
+
+        coroutineScope {
+            val crumb = ensureYahooCrumb(forceRefresh = forceRefresh)
+            val hasTw = cleanSymbols.any { ValuationCalculator.isTaiwanSymbol(it) }
+            val twseMapDeferred = async {
+                if (hasTw) getOrFetchTwseValuationMap(forceRefresh) else emptyMap()
+            }
+
+            val rawQuotes = cleanSymbols
+                .chunked(20)
+                .flatMap { batch -> fetchFallbackBatchQuotes(batch, crumb) }
+                .distinctBy { it.symbol.uppercase(Locale.US) }
+                .filter { it.regularMarketPrice > 0.0 }
+
+            val twseMap = twseMapDeferred.await()
+            val enrichedQuotes = if (hasTw) enrichTwWithTwse(rawQuotes, twseMap) else rawQuotes
+            val quoteBySymbol = enrichedQuotes.associateBy { it.symbol.uppercase(Locale.US) }
+
+            cleanSymbols
+                .mapNotNull { sym -> quoteBySymbol[sym] }
+                .mapIndexed { index, raw ->
+                    async {
+                        val inferredMarket = ValuationCalculator.inferMarketForSymbol(raw.symbol)
+                        val (peBand, pbBand) = fetchHistoricalBands(raw.symbol, inferredMarket, forceRefresh)
+                        val twCode = raw.symbol.substringBefore(".").uppercase(Locale.US)
+                        val resolvedName = if (inferredMarket == ValuationMarket.TW) {
+                            ValuationCalculator.BUILTIN_TW_CHINESE_NAMES[raw.symbol] ?: twseMap[twCode]?.name
+                        } else {
+                            ValuationCalculator.BUILTIN_US_CHINESE_NAMES[raw.symbol]
+                        }
+                        ValuationCalculator.evaluateStockValuation(
+                            rank = index + 1,
+                            raw = raw,
+                            market = ValuationMarket.CUSTOM,
+                            peBand = peBand,
+                            pbBand = pbBand,
+                            resolvedName = resolvedName,
+                        )
+                    }
+                }
+                .awaitAll()
+        }
+    }
+
+    private suspend fun getOrFetchTwseValuationMap(forceRefresh: Boolean): Map<String, TwseValuationRow> {
+        val now = clockMs()
+        if (!forceRefresh && cachedTwseMap.isNotEmpty() && now - cachedTwseMapAtMs < MEMORY_CACHE_TTL_MS) {
+            return cachedTwseMap
+        }
+        val fresh = fetchTwseValuationMap()
+        if (fresh.isNotEmpty()) {
+            cachedTwseMap = fresh
+            cachedTwseMapAtMs = clockMs()
+        }
+        return fresh.ifEmpty { cachedTwseMap }
     }
 
     private suspend fun ensureYahooCrumb(forceRefresh: Boolean): String? {
@@ -364,11 +447,22 @@ class ValuationRemoteService(
     private suspend fun fetchHistoricalBands(
         symbol: String,
         market: ValuationMarket,
+        forceRefresh: Boolean = false,
     ): Pair<HistoricalMultipleBand, HistoricalMultipleBand> {
+        val key = symbol.trim().uppercase(Locale.US)
+        val now = clockMs()
+        if (!forceRefresh) {
+            bandCache[key]?.let { cached ->
+                if (now - cached.fetchedAtMs < DISK_CACHE_TTL_MS) {
+                    return cached.peBand to cached.pbBand
+                }
+            }
+        }
+
         val defaultPe = ValuationCalculator.defaultPeBandFor(symbol, market)
         val defaultPb = ValuationCalculator.defaultPbBandFor(symbol)
 
-        val nowSec = clockMs() / 1000L
+        val nowSec = now / 1000L
         val fiveYearsAgoSec = nowSec - (5L * 365L * 86400L)
         val encodedSymbol = URLEncoder.encode(symbol, "UTF-8")
         val url = "https://query1.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/$encodedSymbol" +
@@ -385,7 +479,9 @@ class ValuationRemoteService(
                     return@runCatching defaultPe to defaultPb
                 }
                 val body = resp.body?.string().orEmpty()
-                parseTimeseriesBands(body, defaultPe, defaultPb)
+                val parsed = parseTimeseriesBands(body, defaultPe, defaultPb)
+                bandCache[key] = CachedBandPair(parsed.first, parsed.second, clockMs())
+                parsed
             }
         }.getOrDefault(defaultPe to defaultPb)
     }

@@ -122,4 +122,37 @@ class ValuationCalculatorTest {
         assertEquals(89.357 * 1.40, fubon.activePriceBand.fairPrice, 0.1)
         assertEquals(ValuationTier.FAIR_HIGH, fubon.tier)
     }
+
+    @Test
+    fun `custom market infers TWD for TW and TWO symbols, USD for US symbols, and flags missing fundamentals`() {
+        val twCustom = ValuationCalculator.evaluateStockValuation(
+            rank = 1,
+            raw = RawScreenerQuote(
+                symbol = "6488.TWO",
+                shortName = "GlobalWafers",
+                regularMarketPrice = 450.0,
+                trailingPE = 18.0,
+                epsTrailingTwelveMonths = 25.0,
+            ),
+            market = ValuationMarket.CUSTOM,
+            peBand = ValuationCalculator.DEFAULT_TW_PE_BAND,
+            pbBand = ValuationCalculator.DEFAULT_TECH_PB_BAND,
+        )
+        assertEquals(MarketCurrency.TWD, twCustom.currency)
+        assertFalse(twCustom.isFallbackBand)
+
+        val etfNoFundamentals = ValuationCalculator.evaluateStockValuation(
+            rank = 2,
+            raw = RawScreenerQuote(
+                symbol = "VOO",
+                shortName = "Vanguard S&P 500 ETF",
+                regularMarketPrice = 520.0,
+            ),
+            market = ValuationMarket.CUSTOM,
+            peBand = ValuationCalculator.DEFAULT_GROWTH_PE_BAND,
+            pbBand = ValuationCalculator.DEFAULT_TECH_PB_BAND,
+        )
+        assertEquals(MarketCurrency.USD, etfNoFundamentals.currency)
+        assertTrue(etfNoFundamentals.isFallbackBand)
+    }
 }

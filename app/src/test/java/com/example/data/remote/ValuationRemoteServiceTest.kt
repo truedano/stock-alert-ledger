@@ -264,4 +264,96 @@ class ValuationRemoteServiceTest {
         assertEquals(1, snap.usTop10.size)
         assertEquals("AAPL", snap.usTop10.first().symbol)
     }
+
+    @Test
+    fun `fetchCustomValuations filters indices, enriches TW stocks, and reuses cached historical bands`() = runTest {
+        var timeseriesCalls = 0
+        val batchQuoteJson = """
+            {
+              "quoteResponse": {
+                "result": [
+                  {
+                    "symbol": "2303.TW",
+                    "shortName": "UMC",
+                    "marketCap": 600000000000,
+                    "regularMarketPrice": 48.5
+                  },
+                  {
+                    "symbol": "AMD",
+                    "shortName": "Advanced Micro Devices",
+                    "marketCap": 250000000000,
+                    "regularMarketPrice": 150.0,
+                    "forwardPE": 25.0,
+                    "epsForward": 6.0
+                  }
+                ]
+              }
+            }
+        """.trimIndent()
+        val bwibbuJson = """
+            [
+              {"Date":"1151123","Code":"2303","Name":"聯電","PEratio":"12.50","DividendYield":"5.80","PBratio":"1.65"}
+            ]
+        """.trimIndent()
+        val timeseriesJson = """
+            {
+              "timeseries": {
+                "result": [
+                  {
+                    "trailingPeRatio": [
+                      {"reportedValue": {"raw": 10.0}},
+                      {"reportedValue": {"raw": 12.0}},
+                      {"reportedValue": {"raw": 14.0}},
+                      {"reportedValue": {"raw": 16.0}}
+                    ],
+                    "trailingPbRatio": [
+                      {"reportedValue": {"raw": 1.2}},
+                      {"reportedValue": {"raw": 1.5}},
+                      {"reportedValue": {"raw": 1.8}},
+                      {"reportedValue": {"raw": 2.1}}
+                    ]
+                  }
+                ]
+              }
+            }
+        """.trimIndent()
+
+        val client = OkHttpClient.Builder()
+            .addInterceptor(Interceptor { chain ->
+                val req = chain.request()
+                val url = req.url.toString()
+                when {
+                    url.contains("fc.yahoo.com") -> textResponse(req, 200, "ok")
+                    url.contains("getcrumb") -> textResponse(req, 200, "testCrumb")
+                    url.contains("v7/finance/quote") -> jsonResponse(req, 200, batchQuoteJson)
+                    url.contains("BWIBBU_ALL") -> jsonResponse(req, 200, bwibbuJson)
+                    url.contains("fundamentals-timeseries") -> {
+                        timeseriesCalls++
+                        jsonResponse(req, 200, timeseriesJson)
+                    }
+                    else -> jsonResponse(req, 404, "{}")
+                }
+            })
+            .build()
+
+        val service = ValuationRemoteService(
+            context = null,
+            client = client,
+            delayFn = {},
+        )
+
+        val first = service.fetchCustomValuations(listOf("2303.TW", "AMD", "^TWII"))
+        assertEquals(2, first.size)
+        assertEquals("聯電", first[0].name)
+        assertEquals(ValuationMarket.CUSTOM, first[0].market)
+        assertEquals(com.example.domain.model.MarketCurrency.TWD, first[0].currency)
+        assertEquals(12.5, first[0].trailingPe!!, 0.01)
+        assertEquals(com.example.domain.model.MarketCurrency.USD, first[1].currency)
+        assertEquals(2, timeseriesCalls)
+
+        // Second call without forceRefresh should reuse cached 5Y bands
+        val second = service.fetchCustomValuations(listOf("2303.TW", "AMD"), forceRefresh = false)
+        assertEquals(2, second.size)
+        assertEquals(2, timeseriesCalls)
+    }
 }

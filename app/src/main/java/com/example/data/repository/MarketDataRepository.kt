@@ -59,12 +59,44 @@ class MarketDataRepository(
     private val _valuationSnapshotFlow = MutableStateFlow<com.example.domain.model.ValuationRadarSnapshot?>(null)
     val valuationSnapshotFlow: StateFlow<com.example.domain.model.ValuationRadarSnapshot?> = _valuationSnapshotFlow.asStateFlow()
 
+    private val _customValuationFlow = MutableStateFlow<List<com.example.domain.model.StockValuationItem>>(emptyList())
+    val customValuationFlow: StateFlow<List<com.example.domain.model.StockValuationItem>> = _customValuationFlow.asStateFlow()
+
     suspend fun fetchValuationRadar(forceRefresh: Boolean = false): com.example.domain.model.ValuationRadarSnapshot? = withContext(Dispatchers.IO) {
         val snap = valuationRemoteService?.fetchValuationRadar(forceRefresh = forceRefresh)
         if (snap != null) {
             _valuationSnapshotFlow.value = snap
         }
         snap ?: _valuationSnapshotFlow.value
+    }
+
+    suspend fun fetchCustomValuations(
+        symbols: List<String>,
+        forceRefresh: Boolean = false,
+    ): List<com.example.domain.model.StockValuationItem> = withContext(Dispatchers.IO) {
+        val service = valuationRemoteService ?: return@withContext emptyList()
+        val items = service.fetchCustomValuations(symbols, forceRefresh = forceRefresh)
+        _customValuationFlow.value = items
+        items
+    }
+
+    suspend fun fetchAndMergeCustomValuation(symbol: String): com.example.domain.model.StockValuationItem? = withContext(Dispatchers.IO) {
+        val service = valuationRemoteService ?: return@withContext null
+        val normalized = symbol.trim().uppercase(java.util.Locale.US)
+        val fetched = service.fetchCustomValuations(listOf(normalized), forceRefresh = false).firstOrNull()
+            ?: return@withContext null
+        val merged = (listOf(fetched) + _customValuationFlow.value.filterNot {
+            it.symbol.equals(fetched.symbol, ignoreCase = true)
+        }).mapIndexed { idx, item -> item.copy(rank = idx + 1) }
+        _customValuationFlow.value = merged
+        fetched
+    }
+
+    fun removeCustomValuationFromCache(symbol: String) {
+        val normalized = symbol.trim().uppercase(java.util.Locale.US)
+        _customValuationFlow.value = _customValuationFlow.value
+            .filterNot { it.symbol.equals(normalized, ignoreCase = true) }
+            .mapIndexed { idx, item -> item.copy(rank = idx + 1) }
     }
 
     suspend fun fetchFearAndGreed(forceRefresh: Boolean = false): com.example.domain.model.FearAndGreedData? = withContext(Dispatchers.IO) {
