@@ -15,10 +15,11 @@
 
 ### ✨ 核心功能
 
-1. **估值雷達：台美前十大權值股雙軌估值與互動式基準切換（v1.12.0+, v1.13.0+）**
+1. **估值雷達：台美前十大權值股雙軌估值、互動式基準切換與自選搜尋估值（v1.12.0+, v1.13.0+, v1.14.0+）**
    - **台美前十大權值股自動校正**：即時依市值排序抓取台股與美股前十大權值股（自動排除雙重股別重複佔位與美股掛牌台股 ADR），台股自動對齊證交所官方中文名稱與 PE/PB，並拉取過去 5 年季度 PE / PB 序列自動定錨 P20（便宜）、P50（合理）、P80（昂貴）倍數區間。
    - **雙軌估值與金融股 P/B 保護**：一般股預設採「預估 PE × 歷史分位」並計算隱含獲利成長率；金融股與波克夏 (`BRK-B`) 自動切換為「每股淨值 × 歷史 P/B 分位」為主導模型。
    - **互動式估值基準切換（v1.13.0+）**：點擊單張股票卡片四宮格中的 **「預估 PE」**、**「過去 PE」** 或 **「淨值比 P/B」**，即可即時切換評估基準，同步更新該卡的位階標籤、折溢價幅度、估值河流圖與三欄價格，並可點擊狀態標籤一鍵重置回系統預設主導基準。
+   - **自選與搜尋任意個股估值（v1.14.0+）**：新增 **「⭐ 自選與搜尋」** 分頁，自動帶入自選監控清單非指數標的，並支援即時搜尋任一台股（含上市 `.TW`、上櫃 `.TWO`）或美股代號與中文名稱加入估值；自動推斷 `TWD` / `USD` 幣別、補齊證交所最新基本面，內建單檔 5 年歷史分位快取（6 小時）加速更新，並針對缺乏有效盈餘／淨值數據的虧損股或 ETF 顯示警語提示。
    - **一鍵設定目標價監控**：底部「設便宜價 / 設合理價」按鈕會自動依當前選取的評估基準帶入圓整目標價，一鍵加入監控提醒。
 
 2. **三大總經籌碼指標細項面板與歷史追蹤（v1.12.0+）**
@@ -42,7 +43,7 @@
    - **網路請求指數退避重試 (Exponential Backoff)**：強化外部行情與證交所融資爬蟲的容錯機制，遭遇伺服器暫時性異常時自動重試，確保報價不中斷。
 
 2. **自選股 K 線技術圖表與融資維持率副圖（v1.8.0+）**
-   - **K 線展開與買點可視化**：自選股卡片支援一鍵展開高精細互動式 K 線圖，直觀查看歷史走勢，並於主圖直接繪製警報設定之買點防線（如 MA 均線、波段回撤價位或目標價位）。
+   - **K 線展開與買點可視化**：自選股卡片支援一鍵展開高精細互動式 K 線圖，直觀查看歷史走勢，並於主圖直接繪製警報設定之買點防線（如 MA 均線、波段回撤價位或目標價位）；支援 K 線歷史快取持久化與副圖序列計算最佳化（v1.12.1+）。
    - **推估融資維持率副圖與 130% 追繳防線**：台股標的自動呈現歷史推估融資維持率副圖，標示 130% 融資斷頭警戒紅線與即時維持率標籤，並於主圖同步繪製追繳臨界價位防線，精準避開或把握籌碼斷頭賣壓。
    - **多週期靈活切換**：內建快捷週期切換晶片（1 個月、3 個月、6 個月、1 年），流暢縮放與檢視中長期位階。
    - **卡片排版最佳化**：獨立「預定買入金額與預估股數」專屬資訊橫幅，解決手機窄螢幕操作按鈕與金額擠壓換行問題。
@@ -78,7 +79,7 @@
 
 2. **背景排程與盤中高頻監控**
    - 透過 Android WorkManager 定期在背景檢查股價。
-   - **盤中高頻前景常駐監控與自動節能（v1.2.0+, v1.3.0+）**：支援啟動專屬 Foreground Service，自選 15 秒、30 秒、1 分鐘或 5 分鐘即時輪詢股價與比對條件；結合台美股開休市智慧感知，休市期間自動降頻節能，並在非開盤時段智慧跳過 WorkManager 背景輪詢，大幅降低電量與網路消耗；App 關閉時自動停止釋放資源。
+   - **盤中高頻前景常駐監控與自動節能（v1.2.0+, v1.3.0+, v1.12.1+）**：支援啟動專屬 Foreground Service，自選 15 秒、30 秒、1 分鐘或 5 分鐘即時輪詢股價與比對條件；結合台美股開休市智慧感知（含台股指數開盤時段判斷），休市期間自動降頻節能，並在非開盤時段智慧跳過 WorkManager 背景輪詢，大幅降低電量與網路消耗；強化前景服務與桌面小工具生命週期保護，App 關閉時自動停止釋放資源。
    - 達到條件時即刻發出高優先級通知，避免錯過買入佈局時機。
    - 智慧冷卻機制：同一條件在當日觸發後自動標註，避免重複騷擾。
 
@@ -97,7 +98,7 @@
 6. **資料管理與安全備份（v1.1.0+）**
    - **儲存備份**：一鍵將所有自選監控、成交記帳與設定導出為標準 JSON 檔至本地空間。
    - **傳送分享**：一鍵上傳備份至 **Google 雲端硬碟 (Google Drive)**、Gmail、LINE 等，換機備份無痛搞定。
-   - **匯入還原**：支援選取備份檔完整覆蓋還原，內建資料庫事務保護與主鍵安全重配。
+   - **匯入還原與安全保護**：支援選取備份檔完整覆蓋還原，內建備份格式檢核、資料庫事務保護與主鍵安全重配，並收斂 `FileProvider` 授權路徑確保分享檔案安全性（v1.12.0+, v1.12.1+）。
 
 7. **應用程式自動更新與 CI/CD 自動化**
    - 整合 GitHub Releases API，可於 App 內一鍵檢查並下載安裝最新版本 APK。
@@ -123,7 +124,7 @@
 
 ### 📲 安裝與下載
 
-請前往 [GitHub Releases](https://github.com/truedano/stock-alert-ledger/releases/latest) 下載最新版本的 `app-release.apk` 進行安裝。
+請前往 [GitHub Releases](https://github.com/truedano/stock-alert-ledger/releases/latest) 下載最新版本的 `stockAlertLedger-vX.Y.Z.apk` 進行安裝，或於 App 內點擊檢查更新自動下載安裝。
 
 ---
 
@@ -135,10 +136,11 @@
 
 ### ✨ Key Features
 
-1. **Valuation Radar: Top 10 TW/US Large-Cap Dual-Track Valuation & Interactive Basis Switching (v1.12.0+, v1.13.0+)**
+1. **Valuation Radar: Top 10 TW/US Large-Cap Dual-Track Valuation, Interactive Basis Switching & Custom Stock Search (v1.12.0+, v1.13.0+, v1.14.0+)**
    - **Auto-Calibrated Top 10 Market-Cap Leaders**: Dynamically fetches top 10 Taiwan and US equities by market cap (deduplicating dual share classes and Taiwan ADRs), aligns TWSE official Chinese names, and pulls 5-year quarterly PE/PB series to auto-anchor P20 (Cheap), P50 (Fair), and P80 (Expensive) bands.
    - **Dual-Track PE / P/B Valuation**: Defaults to Forward PE × historical percentiles with implied EPS growth for standard equities, while automatically switching financial stocks and `BRK-B` to P/B-priority valuation.
    - **Interactive Valuation Basis Switching (v1.13.0+)**: Tap **Forward PE**, **Trailing PE**, or **P/B** directly on any stock card to dynamically switch the evaluation basis—updating the tier badge, margin of safety, valuation river bar, and three-column target prices in place, with one-tap reset to the default primary method.
+   - **Custom Watchlist & Arbitrary Stock Search Valuation (v1.14.0+)**: Adds a **"Custom & Search"** tab that automatically merges non-index watchlist holdings and supports real-time search for any Taiwan (`.TW` / `.TWO`) or US ticker/name to compute 5-year historical PE/PB bands on demand. Automatically infers `TWD`/`USD` currency, enriches TWSE fundamentals, caches per-stock historical bands (6h TTL), and flags loss-making stocks or ETFs lacking valid fundamentals.
    - **One-Tap Price Alert Creation**: "Set Cheap Price" and "Set Fair Price" buttons automatically use the currently selected valuation basis to create target price alerts.
 
 2. **Macro & Chip Indicator Detail Panels & Historical Tracking (v1.12.0+)**
@@ -162,7 +164,7 @@
    - **Network Request Resilience**: Integrated exponential backoff retry mechanisms for Yahoo Finance and TWSE market data fetching to ensure uninterrupted quotes.
 
 2. **Interactive Candlestick Charts & Margin Maintenance Rate Indicators (v1.8.0+)**
-   - **Expandable K-Line Chart & Strategy Visualizer**: One-tap expansion of high-resolution candlestick charts on watchlist cards with visible alert target price lines directly overlaid on the chart (MA support, peak drawdown targets, price thresholds).
+   - **Expandable K-Line Chart & Strategy Visualizer**: One-tap expansion of high-resolution candlestick charts on watchlist cards with visible alert target price lines directly overlaid on the chart (MA support, peak drawdown targets, price thresholds), backed by persistent K-line caching and optimized sub-chart series calculation (v1.12.1+).
    - **Estimated Margin Maintenance Sub-Chart & 130% Liquidation Line**: Real-time margin keep rate sub-chart for Taiwan equities with a 130% margin-call red boundary and current keep rate badge, mapping margin risk directly onto the main price chart.
    - **Flexible Timeframe Selector**: Quick time-range filter chips (1M / 3M / 6M / 1Y) for seamless multi-period trend and cycle analysis.
    - **Refined Card Layout**: Dedicated clean banner for planned purchase budget and estimated shares, preventing button clutter and line truncation on narrow mobile screens.
@@ -198,7 +200,7 @@
 
 2. **Background Monitoring & Intraday High-Frequency Alerts**
    - Powered by Android WorkManager for periodic background market checking.
-   - **Intraday High-Frequency Foreground Service & Auto Power-Saving (v1.2.0+, v1.3.0+)**: Dedicated Foreground Service supporting customizable polling intervals (15s, 30s, 1m, 5m). Incorporates market session awareness to automatically throttle down polling during non-trading hours and skip WorkManager cycles when markets are closed, significantly reducing battery and data consumption; automatically terminates and cleans up when the app task is dismissed.
+   - **Intraday High-Frequency Foreground Service & Auto Power-Saving (v1.2.0+, v1.3.0+, v1.12.1+)**: Dedicated Foreground Service supporting customizable polling intervals (15s, 30s, 1m, 5m). Incorporates market session awareness (including Taiwan index trading hours) to automatically throttle down polling during non-trading hours and skip WorkManager cycles when markets are closed, significantly reducing battery and data consumption; hardens Foreground Service and AppWidget lifecycle protection so resources are cleanly released when the app task is dismissed.
    - High-priority push notifications ensure you never miss buying opportunities.
    - Smart daily cooldown avoids duplicate alert spam on the same day.
 
@@ -217,7 +219,7 @@
 6. **Data Management & Backup / Restore (v1.1.0+)**
    - **Export / Save**: Export all rules, ledger records, and preferences into a clean, structured JSON file.
    - **Share to Cloud**: Directly upload backups to **Google Drive**, send via Gmail, or share to other devices.
-   - **Import / Restore**: One-click restore with atomic database transactions and primary key conflict prevention.
+   - **Import / Restore & Security Hardening**: One-click restore with backup validation, atomic database transactions, primary key conflict prevention, and tightened `FileProvider` sharing paths (v1.12.0+, v1.12.1+).
 
 7. **In-App Auto Updater & Automated CI/CD**
    - Seamlessly checks GitHub Releases for new APK versions and facilitates in-app updates.
@@ -243,7 +245,7 @@
 
 ### 📲 Download & Installation
 
-Download the latest signed release APK from [GitHub Releases](https://github.com/truedano/stock-alert-ledger/releases/latest).
+Download the latest signed release APK (`stockAlertLedger-vX.Y.Z.apk`) from [GitHub Releases](https://github.com/truedano/stock-alert-ledger/releases/latest), or check for updates directly inside the app.
 
 ---
 
