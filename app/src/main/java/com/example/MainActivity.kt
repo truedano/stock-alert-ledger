@@ -356,7 +356,14 @@ fun StockAssistantRoot(
                                         contentDescription = tab.label,
                                     )
                                 },
-                                label = { Text(tab.label) },
+                                label = {
+                                    Text(
+                                        text = tab.label,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    )
+                                },
                                 modifier = Modifier.testTag(tab.testTag),
                                 colors = NavigationBarItemDefaults.colors(
                                     selectedIconColor = BrandSky,
@@ -402,7 +409,14 @@ fun StockAssistantRoot(
                                         contentDescription = tab.label,
                                     )
                                 },
-                                label = { Text(tab.label) },
+                                label = {
+                                    Text(
+                                        text = tab.label,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    )
+                                },
                                 modifier = Modifier.testTag(tab.testTag),
                             )
                         }

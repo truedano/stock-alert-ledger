@@ -7,6 +7,8 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -38,6 +40,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.toColorInt
@@ -306,6 +309,9 @@ fun StockCandleStickChart(
                             style = FinancialTextStyles.numericSmall,
                             color = TextSecondary,
                             fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp),
                         )
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -316,6 +322,8 @@ fun StockCandleStickChart(
                                 style = MaterialTheme.typography.labelSmall,
                                 color = TextSecondary,
                                 fontSize = 11.sp,
+                                maxLines = 1,
+                                softWrap = false,
                             )
                             Text(
                                 text = Formatters.formatPrice(activeCandle.close, currency),
@@ -323,32 +331,41 @@ fun StockCandleStickChart(
                                 color = kColor,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 12.sp,
+                                maxLines = 1,
+                                softWrap = false,
                             )
                         }
                     }
-                    // 第二行：開盤、最高、最低三項輔助數據平分展示
-                    Row(
+                    // 第二行：開盤、最高、最低三項輔助數據（省略重複幣別，空間不足時整組換行）
+                    @OptIn(ExperimentalLayoutApi::class)
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
                         Text(
-                            text = "開 ${Formatters.formatPrice(activeCandle.open, currency)}",
+                            text = "開 ${Formatters.formatPrice(activeCandle.open, currency, includeCurrency = false)}",
                             style = FinancialTextStyles.numericSmall,
                             color = TextSecondary,
                             fontSize = 11.sp,
+                            maxLines = 1,
+                            softWrap = false,
                         )
                         Text(
-                            text = "高 ${Formatters.formatPrice(activeCandle.high, currency)}",
+                            text = "高 ${Formatters.formatPrice(activeCandle.high, currency, includeCurrency = false)}",
                             style = FinancialTextStyles.numericSmall,
                             color = TaiwanRed,
                             fontSize = 11.sp,
+                            maxLines = 1,
+                            softWrap = false,
                         )
                         Text(
-                            text = "低 ${Formatters.formatPrice(activeCandle.low, currency)}",
+                            text = "低 ${Formatters.formatPrice(activeCandle.low, currency, includeCurrency = false)}",
                             style = FinancialTextStyles.numericSmall,
                             color = TaiwanGreen,
                             fontSize = 11.sp,
+                            maxLines = 1,
+                            softWrap = false,
                         )
                     }
                 }
@@ -710,12 +727,18 @@ private fun DrawScope.drawCandleStickChart(
                     isAntiAlias = true
                     typeface = android.graphics.Typeface.DEFAULT_BOLD
                 }
-                val text = marker.label
-                val textWidth = paint.measureText(text)
-                val badgeWidth = (textWidth + 16f).coerceAtLeast(paddingRight - 4f)
+                val maxBadgeWidth = (size.width - 8f).coerceAtLeast(paddingRight - 4f)
+                val ellipsizedText = android.text.TextUtils.ellipsize(
+                    marker.label,
+                    android.text.TextPaint(paint),
+                    maxBadgeWidth - 16f,
+                    android.text.TextUtils.TruncateAt.END,
+                ).toString()
+                val textWidth = paint.measureText(ellipsizedText)
+                val badgeWidth = (textWidth + 16f).coerceIn(paddingRight - 4f, maxBadgeWidth)
                 val badgeHeight = 32f
                 val badgeTop = (y - badgeHeight / 2f).coerceIn(0f, chartHeight - badgeHeight)
-                val badgeLeft = (size.width - badgeWidth - 2f).coerceAtLeast(chartWidth + 2f)
+                val badgeLeft = (size.width - badgeWidth - 2f).coerceAtLeast(4f)
 
                 drawRoundRect(
                     color = marker.color.copy(alpha = 0.25f),
@@ -733,7 +756,7 @@ private fun DrawScope.drawCandleStickChart(
                 )
 
                 drawContext.canvas.nativeCanvas.apply {
-                    drawText(text, badgeLeft + 8f, badgeTop + 22f, paint)
+                    drawText(ellipsizedText, badgeLeft + 8f, badgeTop + 22f, paint)
                 }
             }
         }

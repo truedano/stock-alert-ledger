@@ -51,11 +51,19 @@ object Formatters {
         }
     }
 
-    fun formatPrice(price: Double, currency: MarketCurrency): String {
+    fun formatPrice(price: Double, currency: MarketCurrency, includeCurrency: Boolean = true): String {
         val safe = if (price.isNaN() || price.isInfinite()) 0.0 else price
-        return when (currency) {
-            MarketCurrency.TWD -> "NT$ ${twdPriceFormat.get()!!.format(safe)}"
-            MarketCurrency.USD -> "US$ ${usdFormat.get()!!.format(safe)}"
+        val formatted = when (currency) {
+            MarketCurrency.TWD -> twdPriceFormat.get()!!.format(safe)
+            MarketCurrency.USD -> usdFormat.get()!!.format(safe)
+        }
+        return if (includeCurrency) {
+            when (currency) {
+                MarketCurrency.TWD -> "NT$ $formatted"
+                MarketCurrency.USD -> "US$ $formatted"
+            }
+        } else {
+            formatted
         }
     }
 
